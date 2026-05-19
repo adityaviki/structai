@@ -1,0 +1,32 @@
+# Local notes & agent state
+.misc/
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# uv
+.uv/
+
+# Tooling
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# Build artifacts
+build/
+dist/
+*.egg
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
