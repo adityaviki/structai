@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.gitignore` for Python tooling and local agent state.
 - This changelog.
 - `CLAUDE.md` with project guidance, including how to maintain this changelog.
+- `CHECKLIST.md` — phase-by-phase implementation checklist derived from `plans/plan.md`, plus a cross-cutting invariants section that mirrors the non-negotiables in `CLAUDE.md`.
+- `CLAUDE.md` now lists `plans/plan.md` / `CHECKLIST.md` / `CHANGELOG.md` as the three source-of-truth documents, documents how to keep the checklist in sync (same commit as the code change), and pins the non-negotiable invariants (IR-only execution, no Python/SQL emission, immutable `ir_jsonb`, prompt-bound PII redaction, managed-schema-only writes, `import_run_id` allocated before staging, no run job before `approved_for_execution`).
 
 ### Changed
 - v1 load modes reduced from six to four (`append`, `replace`, `upsert`, `fail_if_duplicate`); `merge` and `version` deferred to v1.3 alongside reuse.
