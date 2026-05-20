@@ -19,15 +19,15 @@ Tracks progress against [`plans/plan.md`](plans/plan.md). Phase numbering and se
 - [x] `.env.example` documenting required env vars (DB URL, anthropic key, `STRUCTAI_ALLOW_RAW_LLM_SAMPLES`)
 
 ### App skeletons
-- [ ] `apps/api/src/structai_api/main.py` — FastAPI app with `/healthz` ping
-- [ ] `apps/api/src/structai_api/deps.py` — DB session, settings
-- [ ] `apps/api/src/structai_api/stream.py` — SSE plumbing stub backed by `event_log`
-- [ ] `apps/api/src/structai_api/routes/` — empty modules for `files`, `sessions`, `jobs`, `schemas`, `pipelines`, `runs`, `tables`
-- [ ] `apps/worker/src/structai_worker/main.py` — polling loop skeleton
-- [ ] `apps/worker/src/structai_worker/lease.py` — heartbeat + reaper hooks
-- [ ] `apps/worker/src/structai_worker/tasks.py` — dispatch into `packages/core`
-- [ ] `apps/web` — Vite + React 18 + TS bootstrapped; root route renders "ok"
-- [ ] `packages/core/src/structai_core/` — empty namespace packages for `io`, `profile`, `agent`, `ir`, `schema`, `script`, `execute`, `store`, `eval`
+- [x] `apps/api/src/structai_api/main.py` — FastAPI app with `/healthz` ping
+- [~] `apps/api/src/structai_api/deps.py` — DB session, settings *(settings wired; async session lands with migrations)*
+- [x] `apps/api/src/structai_api/stream.py` — SSE plumbing stub backed by `event_log`
+- [x] `apps/api/src/structai_api/routes/` — empty modules for `files`, `sessions`, `jobs`, `schemas`, `pipelines`, `runs`, `tables`
+- [~] `apps/worker/src/structai_worker/main.py` — polling loop skeleton *(boot + signal handling; FOR UPDATE SKIP LOCKED poll arrives in commit 4)*
+- [~] `apps/worker/src/structai_worker/lease.py` — heartbeat + reaper hooks *(stub; impl in commit 4)*
+- [x] `apps/worker/src/structai_worker/tasks.py` — dispatch into `packages/core`
+- [x] `apps/web` — Vite + React 18 + TS bootstrapped; root route renders "ok"
+- [x] `packages/core/src/structai_core/` — empty namespace packages for `io`, `profile`, `agent`, `ir`, `schema`, `script`, `execute`, `store`, `eval`
 
 ### Postgres migrations *(plan §4)*
 All migrations land in Phase 0 so every later phase writes to a stable schema.
