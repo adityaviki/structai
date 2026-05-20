@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAPI codegen wired end-to-end: `apps/api/src/structai_api/export_openapi.py` prints the FastAPI schema to stdout (no running server required), `make openapi-gen` pipes it through `openapi-typescript` into `apps/web/src/api/schema.ts`, and `apps/web/src/api/client.ts` exports an `openapi-fetch` instance typed against those `paths`. Initial scaffold covers `/healthz`; `apps/web/src/App.tsx` calls it to prove the round-trip works end-to-end.
 
 ### Changed
+- Tests are now a first-class deliverable on `CHECKLIST.md`. Every phase (Phase 0 through Hardening) gained an explicit `### Tests` subsection; an implementation item cannot go to `[x]` until its tests pass, and a phase is not "done" until the whole Tests subsection is green. `CLAUDE.md` documents the test layout (`tests/<package>/` mirrors source, web tests under `apps/web/src/__tests__/`), the cadence (`make test-py` / `make test-ts` on every commit; `pytest -m eval` slower track), and the `structai_test` database convention. Phase 0 implementation already shipped, but its Tests subsection is `[ ]` and gates closing out the phase.
+
+### Changed
 - v1 load modes reduced from six to four (`append`, `replace`, `upsert`, `fail_if_duplicate`); `merge` and `version` deferred to v1.3 alongside reuse.
 - `derive_column` DSL shrunk for v1 to column refs, literals, `concat`, `substr`, `upper`, `lower`, `coalesce`; arithmetic, comparisons, and `case when` deferred to v1.3.
 - IR lifecycle clarified: `ir_jsonb` is immutable per row, only `state` mutates in place; a new revision row is created whenever IR content changes. Added a direct `proposed_ir → validated_ir` path so an agent-proposed IR doesn't have to pass through `user_edited_ir`.

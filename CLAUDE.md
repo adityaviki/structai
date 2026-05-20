@@ -17,6 +17,23 @@ Whenever you finish work that maps to a `CHECKLIST.md` item:
 - When you finish a whole phase, add a `*(done YYYY-MM-DD)*` tag to its heading.
 - If a code change requires a new checklist item that the plan doesn't yet cover, update `plans/plan.md` first (with a CHANGELOG `Changed` bullet), then add the checklist item — never invent checklist items that aren't traceable to the plan.
 
+## Testing
+
+Tests are part of done. Every phase in `CHECKLIST.md` has an explicit `### Tests` subsection — an implementation item doesn't go to `[x]` until its tests are written and passing, and a phase is not "done" until the whole Tests subsection is green.
+
+Test layout:
+
+- `tests/` at repo root for cross-package integration tests (migrations, queue with a real Postgres, end-to-end worker lifecycle).
+- `tests/<package>/` mirrors the source layout (`tests/jobs/`, `tests/profile/`, `tests/ir/`, etc.).
+- Web-side tests live under `apps/web/src/__tests__/` (vitest + React Testing Library).
+
+Cadence:
+
+- `make test-py` and `make test-ts` run on every commit (locally and in CI). These must pass before tagging a checklist item.
+- `pytest -m eval` runs the eval harness (plan §15) — slower, mock-LLM in CI, real-LLM nightly. The eval suite is **additive**, not a substitute for unit / integration tests.
+
+Database tests use a separate `structai_test` database with migrations applied once per session and transaction-rollback per test. Never run tests against the dev DB.
+
 ## Maintaining the changelog
 
 This repo uses [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) (see `CHANGELOG.md`) with [Semantic Versioning](https://semver.org/).
