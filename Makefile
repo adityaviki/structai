@@ -82,8 +82,11 @@ test-ts:
 
 # --- OpenAPI ------------------------------------------------------------------
 
-openapi-gen: ## Regenerate apps/web/src/api/schema.ts from the running API.
-	pnpm exec openapi-typescript http://localhost:8000/openapi.json -o apps/web/src/api/schema.ts
+openapi-gen: ## Regenerate apps/web/src/api/schema.ts from the FastAPI app (no server needed).
+	@mkdir -p apps/web/src/api
+	uv run python -m structai_api.export_openapi > /tmp/structai-openapi.json
+	pnpm exec openapi-typescript /tmp/structai-openapi.json -o apps/web/src/api/schema.ts
+	@rm -f /tmp/structai-openapi.json
 
 # --- Misc ---------------------------------------------------------------------
 

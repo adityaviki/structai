@@ -15,7 +15,7 @@ Tracks progress against [`plans/plan.md`](plans/plan.md). Phase numbering and se
 - [x] `Makefile` or `mise.toml` providing `make dev` (Postgres up, API + worker + web in watch mode)
 - [x] `ruff` config + format/lint scripts (Python)
 - [x] `biome` config + format/lint scripts (TypeScript)
-- [ ] OpenAPI generator wired so `apps/web/src/api/` consumes types emitted from `apps/api`
+- [x] OpenAPI generator wired so `apps/web/src/api/` consumes types emitted from `apps/api`
 - [x] `.env.example` documenting required env vars (DB URL, anthropic key, `STRUCTAI_ALLOW_RAW_LLM_SAMPLES`)
 
 ### App skeletons
