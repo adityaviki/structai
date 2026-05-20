@@ -15,6 +15,11 @@ venv/
 # uv
 .uv/
 
+# Node / TS
+node_modules/
+.pnpm-store/
+*.tsbuildinfo
+
 # Tooling
 .ruff_cache/
 .pytest_cache/
@@ -24,6 +29,9 @@ venv/
 build/
 dist/
 *.egg
+
+# Local app state (plan §3) — uploads, profiles, pipelines, manifests, rejected_rows
+/data/
 
 # OS / editor
 .DS_Store

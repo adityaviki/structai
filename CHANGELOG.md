@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CLAUDE.md` with project guidance, including how to maintain this changelog.
 - `CHECKLIST.md` — phase-by-phase implementation checklist derived from `plans/plan.md`, plus a cross-cutting invariants section that mirrors the non-negotiables in `CLAUDE.md`.
 - `CLAUDE.md` now lists `plans/plan.md` / `CHECKLIST.md` / `CHANGELOG.md` as the three source-of-truth documents, documents how to keep the checklist in sync (same commit as the code change), and pins the non-negotiable invariants (IR-only execution, no Python/SQL emission, immutable `ir_jsonb`, prompt-bound PII redaction, managed-schema-only writes, `import_run_id` allocated before staging, no run job before `approved_for_execution`).
+- Phase 0 repo scaffold: root `pyproject.toml` (uv workspace with members `apps/api`, `apps/worker`, `packages/core`), `pnpm-workspace.yaml` (covers `apps/web`), `docker-compose.yml` (Postgres 16 only), `Makefile` (`make install / db-up / migrate / dev / lint / test / openapi-gen`), `.env.example` (DB URLs, `STRUCTAI_USER_SCHEMA`, `STRUCTAI_ALLOW_RAW_LLM_SAMPLES`, worker lease/heartbeat tunables), `.python-version` pinned to 3.12, root `package.json` (biome + concurrently + openapi-typescript), `biome.json`, and ruff config under `[tool.ruff]`. `/data/`, `node_modules/`, and `*.tsbuildinfo` added to `.gitignore`.
 
 ### Changed
 - v1 load modes reduced from six to four (`append`, `replace`, `upsert`, `fail_if_duplicate`); `merge` and `version` deferred to v1.3 alongside reuse.

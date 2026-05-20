@@ -1,0 +1,29 @@
+[tool.uv.workspace]
+members = ["apps/api", "apps/worker", "packages/core"]
+
+[dependency-groups]
+dev = [
+    "alembic>=1.13",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.6.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["apps/api/src", "apps/worker/src", "packages/core/src"]
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "RUF", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/env.py" = ["E402"]
+
+[tool.pytest.ini_options]
+markers = [
+    "eval: part of the eval harness (deselect with -m 'not eval')",
+]
+asyncio_mode = "auto"
+testpaths = ["tests", "apps", "packages"]

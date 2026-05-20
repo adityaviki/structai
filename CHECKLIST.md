@@ -9,14 +9,14 @@ Tracks progress against [`plans/plan.md`](plans/plan.md). Phase numbering and se
 ## Phase 0 — Monorepo scaffold + data model *(plan §10, 1 day)*
 
 ### Repo & tooling
-- [ ] `pyproject.toml` at root configured as a `uv` workspace, with members `apps/api`, `apps/worker`, `packages/core`
-- [ ] `pnpm-workspace.yaml` covering `apps/web` (and any shared TS packages)
-- [ ] `docker-compose.yml` with Postgres 16 only (no Redis)
-- [ ] `Makefile` or `mise.toml` providing `make dev` (Postgres up, API + worker + web in watch mode)
-- [ ] `ruff` config + format/lint scripts (Python)
-- [ ] `biome` config + format/lint scripts (TypeScript)
+- [x] `pyproject.toml` at root configured as a `uv` workspace, with members `apps/api`, `apps/worker`, `packages/core`
+- [x] `pnpm-workspace.yaml` covering `apps/web` (and any shared TS packages)
+- [x] `docker-compose.yml` with Postgres 16 only (no Redis)
+- [x] `Makefile` or `mise.toml` providing `make dev` (Postgres up, API + worker + web in watch mode)
+- [x] `ruff` config + format/lint scripts (Python)
+- [x] `biome` config + format/lint scripts (TypeScript)
 - [ ] OpenAPI generator wired so `apps/web/src/api/` consumes types emitted from `apps/api`
-- [ ] `.env.example` documenting required env vars (DB URL, anthropic key, `STRUCTAI_ALLOW_RAW_LLM_SAMPLES`)
+- [x] `.env.example` documenting required env vars (DB URL, anthropic key, `STRUCTAI_ALLOW_RAW_LLM_SAMPLES`)
 
 ### App skeletons
 - [ ] `apps/api/src/structai_api/main.py` — FastAPI app with `/healthz` ping
