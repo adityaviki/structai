@@ -20,7 +20,7 @@ Tracks progress against [`plans/plan.md`](plans/plan.md). Phase numbering and se
 
 ### App skeletons
 - [x] `apps/api/src/structai_api/main.py` — FastAPI app with `/healthz` ping
-- [~] `apps/api/src/structai_api/deps.py` — DB session, settings *(settings wired; async session lands with migrations)*
+- [x] `apps/api/src/structai_api/deps.py` — DB session, settings
 - [x] `apps/api/src/structai_api/stream.py` — SSE plumbing stub backed by `event_log`
 - [x] `apps/api/src/structai_api/routes/` — empty modules for `files`, `sessions`, `jobs`, `schemas`, `pipelines`, `runs`, `tables`
 - [~] `apps/worker/src/structai_worker/main.py` — polling loop skeleton *(boot + signal handling; FOR UPDATE SKIP LOCKED poll arrives in commit 4)*
@@ -32,19 +32,19 @@ Tracks progress against [`plans/plan.md`](plans/plan.md). Phase numbering and se
 ### Postgres migrations *(plan §4)*
 All migrations land in Phase 0 so every later phase writes to a stable schema.
 
-- [ ] `files` — `id`, `original_name`, `bytes`, `source_sha256`, `quarantine_path`, `live_path`, `uploaded_at`, `retention_until`
-- [ ] `profiles` — `id`, `file_id` FK, `profile_sha256`, `profile_jsonb`, `created_at`
-- [ ] `agent_sessions` — `id`, `file_id` FK, `created_at`, `cost_tokens_in`, `cost_tokens_out`, `status`
-- [ ] `pipeline_revisions` — `id`, `session_id` FK, `parent_id` FK, `ir_version`, `ir_jsonb`, `ir_sha256`, `state`, `created_by` (`agent` / `user_edit`), `created_at`; **append-only content invariant** documented in code
-- [ ] `pipeline_artifacts` — `id`, `revision_id` FK, `kind` (`pipeline_py` / `manifest_json` / `dry_run_report`), `path`, `sha256`
-- [ ] `jobs` — `id`, `kind`, `payload_jsonb`, `idempotency_key`, `status`, `locked_at`, `locked_by`, `lease_expires_at`, `heartbeat_at`, `attempts`, `max_attempts`, `error_class` (`retryable` / `terminal`), `last_error`, `cancel_requested`, `created_at`, `finished_at`
-- [ ] `event_log` — `id` bigserial (monotonic), `session_id` FK, `kind`, `payload_jsonb`, `created_at`
-- [ ] `event_cursors` *(optional, not wired in v1)* — `session_id` FK, `client_id`, `last_event_id`, `updated_at`
-- [ ] `import_runs` — `id`, `revision_id` FK, `status`, `started_at`, `finished_at`, `dry_run_only`
-- [ ] `import_run_tables` — `id`, `run_id` FK, `table_name`, `load_mode`, `rows_inserted`, `rows_updated`, `rows_rejected`
-- [ ] `rejected_row_artifacts` — `id`, `run_id_table_id` FK, `path`, `count`
-- [ ] `pipeline_registry` *(used in v1.3)* — `id`, `fingerprint`, `revision_id` FK, `last_seen_file_id` FK
-- [ ] Managed user schema `structai_user` created by migration (configurable name)
+- [x] `files` — `id`, `original_name`, `bytes`, `source_sha256`, `quarantine_path`, `live_path`, `uploaded_at`, `retention_until`
+- [x] `profiles` — `id`, `file_id` FK, `profile_sha256`, `profile_jsonb`, `created_at`
+- [x] `agent_sessions` — `id`, `file_id` FK, `created_at`, `cost_tokens_in`, `cost_tokens_out`, `status`
+- [x] `pipeline_revisions` — `id`, `session_id` FK, `parent_id` FK, `ir_version`, `ir_jsonb`, `ir_sha256`, `state`, `created_by` (`agent` / `user_edit`), `created_at`; **append-only content invariant** documented in code
+- [x] `pipeline_artifacts` — `id`, `revision_id` FK, `kind` (`pipeline_py` / `manifest_json` / `dry_run_report`), `path`, `sha256`
+- [x] `jobs` — `id`, `kind`, `payload_jsonb`, `idempotency_key`, `status`, `locked_at`, `locked_by`, `lease_expires_at`, `heartbeat_at`, `attempts`, `max_attempts`, `error_class` (`retryable` / `terminal`), `last_error`, `cancel_requested`, `created_at`, `finished_at`
+- [x] `event_log` — `id` bigserial (monotonic), `session_id` FK, `kind`, `payload_jsonb`, `created_at`
+- [x] `event_cursors` *(optional, not wired in v1)* — `session_id` FK, `client_id`, `last_event_id`, `updated_at`
+- [x] `import_runs` — `id`, `revision_id` FK, `status`, `started_at`, `finished_at`, `dry_run_only`
+- [x] `import_run_tables` — `id`, `run_id` FK, `table_name`, `load_mode`, `rows_inserted`, `rows_updated`, `rows_rejected`
+- [x] `rejected_row_artifacts` — `id`, `run_id_table_id` FK, `path`, `count`
+- [x] `pipeline_registry` *(used in v1.3)* — `id`, `fingerprint`, `revision_id` FK, `last_seen_file_id` FK
+- [x] Managed user schema `structai_user` created by migration (configurable name)
 
 ### Worker job-queue plumbing
 - [ ] Poller using `SELECT ... FOR UPDATE SKIP LOCKED`
