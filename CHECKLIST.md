@@ -23,8 +23,8 @@ Tracks progress against [`plans/plan.md`](plans/plan.md). Phase numbering and se
 - [x] `apps/api/src/structai_api/deps.py` — DB session, settings
 - [x] `apps/api/src/structai_api/stream.py` — SSE plumbing stub backed by `event_log`
 - [x] `apps/api/src/structai_api/routes/` — empty modules for `files`, `sessions`, `jobs`, `schemas`, `pipelines`, `runs`, `tables`
-- [~] `apps/worker/src/structai_worker/main.py` — polling loop skeleton *(boot + signal handling; FOR UPDATE SKIP LOCKED poll arrives in commit 4)*
-- [~] `apps/worker/src/structai_worker/lease.py` — heartbeat + reaper hooks *(stub; impl in commit 4)*
+- [x] `apps/worker/src/structai_worker/main.py` — polling loop skeleton
+- [x] `apps/worker/src/structai_worker/lease.py` — heartbeat + reaper hooks
 - [x] `apps/worker/src/structai_worker/tasks.py` — dispatch into `packages/core`
 - [x] `apps/web` — Vite + React 18 + TS bootstrapped; root route renders "ok"
 - [x] `packages/core/src/structai_core/` — empty namespace packages for `io`, `profile`, `agent`, `ir`, `schema`, `script`, `execute`, `store`, `eval`
@@ -47,13 +47,13 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 - [x] Managed user schema `structai_user` created by migration (configurable name)
 
 ### Worker job-queue plumbing
-- [ ] Poller using `SELECT ... FOR UPDATE SKIP LOCKED`
-- [ ] Lease acquisition: set `locked_at`, `locked_by`, `lease_expires_at` atomically
-- [ ] Heartbeat task refreshes `heartbeat_at` and extends `lease_expires_at` while job runs
-- [ ] Stale-job reaper recycles jobs whose `lease_expires_at` has passed
-- [ ] Idempotency-key dedup on enqueue (returns existing job if key collides)
-- [ ] Retryable vs terminal error classification, with `attempts` / `max_attempts` policy
-- [ ] `cancel_requested` flag honored at step boundaries; cancellation path tested
+- [x] Poller using `SELECT ... FOR UPDATE SKIP LOCKED`
+- [x] Lease acquisition: set `locked_at`, `locked_by`, `lease_expires_at` atomically
+- [x] Heartbeat task refreshes `heartbeat_at` and extends `lease_expires_at` while job runs
+- [x] Stale-job reaper recycles jobs whose `lease_expires_at` has passed
+- [x] Idempotency-key dedup on enqueue (returns existing job if key collides)
+- [x] Retryable vs terminal error classification, with `attempts` / `max_attempts` policy
+- [~] `cancel_requested` flag honored at step boundaries; cancellation path tested *(honored via `CancellationToken`; automated test lands with the first real task in Phase 1)*
 
 ---
 
