@@ -58,15 +58,15 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 - [~] `cancel_requested` flag honored at step boundaries; cancellation path tested *(honored via `CancellationToken`; integration test deferred to the Tests subsection below)*
 
 ### Tests
-- [ ] pytest infrastructure: separate `structai_test` database; session-scoped fixture runs migrations once; function-scoped fixture wraps each test in a transaction that rolls back; `pytest-asyncio` configured (`asyncio_mode = auto` already in `pyproject.toml`)
-- [ ] `tests/test_config.py` — `Settings` reads `.env`, env vars override `.env`, defaults applied for missing optional fields, missing required fields error clearly
+- [x] pytest infrastructure: separate `structai_test` database; session-scoped fixture drops+creates the DB and runs migrations once; function-scoped fixture `TRUNCATE`s all tables and yields a fresh session (transaction-per-test would break the concurrent-claim test — `FOR UPDATE SKIP LOCKED` can't skip rows the same transaction owns); `pytest-asyncio` `asyncio_mode = auto`
+- [x] `tests/test_config.py` — `Settings` reads `.env`, env vars override `.env`, defaults applied for missing optional fields, missing required fields error clearly, `STRUCTAI_ALLOW_RAW_LLM_SAMPLES` boolean parsing, user-schema + worker-tunable overrides
 - [ ] `tests/jobs/test_queue.py` — `enqueue` returns id; duplicate `idempotency_key` returns existing id; `claim_one` transitions row to `running` + sets lease + increments attempts; concurrent `claim_one` from two sessions claims different jobs (`FOR UPDATE SKIP LOCKED`); `heartbeat` extends `lease_expires_at`; `heartbeat` returns `(False, _)` when ownership lost; `heartbeat` returns `(True, True)` when `cancel_requested` set; `fail(retryable, attempts < max)` re-queues; `fail(retryable, attempts == max)` marks `failed`; `fail(terminal)` marks `failed`; `complete`, `cancel`, `request_cancel`
 - [ ] `tests/jobs/test_reaper.py` — expired lease + attempts remaining → back to `queued`; expired lease + max attempts → `failed` with terminal class + diagnostic `last_error`
-- [ ] `tests/jobs/test_cancellation.py` — `CancellationToken.raise_if_cancelled` raises `JobCancelled` after `cancel()`; idempotent
+- [x] `tests/jobs/test_cancellation.py` — `CancellationToken.raise_if_cancelled` raises `JobCancelled` after `cancel()`; idempotent; remains raising on repeated calls
 - [ ] `tests/db/test_migrations.py` — upgrade from empty DB creates every §4 table + the `structai_user` schema; downgrade drops tables (schema preserved); CHECK constraints reject out-of-vocab `status` / `state` / `load_mode` / `created_by` / `kind` / `error_class` values
 - [ ] `tests/db/test_models.py` — `pipeline_revisions` round-trips each valid `state` + `created_by`; deleting a `file` cascades to `profiles` → `agent_sessions` → `pipeline_revisions` → `pipeline_artifacts`
 - [ ] `tests/worker/test_main_loop.py` — end-to-end: enqueue → claim → dispatch → complete; retryable error retries up to `max_attempts`; terminal error stops after one attempt; cooperative cancel (`request_cancel` between heartbeat ticks) closes Phase 0 `[~]`
-- [ ] `make test-py` runs the suite; documented in `README` / `Makefile help`
+- [~] `make test-py` runs the suite; documented in `README` / `Makefile help` *(`make test-py` wired to depend on `db-up`; remaining test files land in the next commit)*
 
 ---
 

@@ -74,7 +74,8 @@ format-ts:
 
 test: test-py test-ts ## Run Python and TypeScript test suites.
 
-test-py:
+# test-py depends on db-up so the test conftest can create/migrate `structai_test`.
+test-py: db-up
 	uv run pytest -m "not eval"
 
 test-ts:

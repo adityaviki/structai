@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Tests are now a first-class deliverable on `CHECKLIST.md`. Every phase (Phase 0 through Hardening) gained an explicit `### Tests` subsection; an implementation item cannot go to `[x]` until its tests pass, and a phase is not "done" until the whole Tests subsection is green. `CLAUDE.md` documents the test layout (`tests/<package>/` mirrors source, web tests under `apps/web/src/__tests__/`), the cadence (`make test-py` / `make test-ts` on every commit; `pytest -m eval` slower track), and the `structai_test` database convention. Phase 0 implementation already shipped, but its Tests subsection is `[ ]` and gates closing out the phase.
+- `make test-py` now depends on `make db-up` so the test conftest can reach Postgres; `psycopg[binary]` added to the root dev group.
+
+### Added
+- Phase 0 test infrastructure: top-level `conftest.py` drops + recreates the `structai_test` database once per session, runs Alembic migrations to head, and exposes per-test `engine` / `sessionmaker` / `db_session` fixtures (TRUNCATE-between-tests rather than transaction-per-test so the queue's concurrent-claim test can use real transactions).
+- `tests/test_config.py` — `Settings` env / `.env` precedence, defaults, required-field error, bool parsing for `STRUCTAI_ALLOW_RAW_LLM_SAMPLES`, user-schema and worker-tunable overrides.
+- `tests/jobs/test_cancellation.py` — `CancellationToken` semantics (idempotent cancel, raise-on-cancel, repeated raising).
 
 ### Changed
 - v1 load modes reduced from six to four (`append`, `replace`, `upsert`, `fail_if_duplicate`); `merge` and `version` deferred to v1.3 alongside reuse.
