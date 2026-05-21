@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `apps/web/src/lib/{format,useFiles,useProfile}.ts` — `humanBytes` / `relativeTime` / `pct` / `cn` / `stringifyError` helpers; polling hooks (2 s interval; turns off when nothing pending; pauses while a request is in flight).
   - `apps/web/src/styles/file-manager.css` — single hand-written stylesheet (BEM-ish). No UI library / no Tailwind / no `clsx` dep.
 - `react-dropzone@^15` added to `apps/web/package.json`.
+- Frontend test harness: `vitest@^2` (pinned to v2 for Vite 5 compatibility), `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`. `apps/web/src/__tests__/FileManager.test.tsx` covers (a) drop a file → POST `/files` → row renders in the list, (b) profile drawer renders `<EMAIL_N>` placeholders verbatim with the PII badge visible.
 - Initial implementation plan in `plans/plan.md` covering architecture, tech choices, phased build, and open questions.
 - `.gitignore` for Python tooling and local agent state.
 - This changelog.
