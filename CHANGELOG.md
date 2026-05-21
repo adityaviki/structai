@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `uv.lock` checked in to pin the resolved workspace dependency set across environments.
 - `structai_core.io.sniff` — CSV/TSV sniffer: BOM detection, encoding via `charset-normalizer` (ASCII normalized to UTF-8 for downstream), delimiter via per-line vote across `,;\t|` cross-checked with `csv.Sniffer`, header heuristic via per-column numeric-vs-string comparison, CRLF / LF line terminator detection. `SniffError` on empty / undecodable input.
 - 9 CSV/TSV fixtures under `tests/fixtures/csv/`: BOM, semicolon-delimited, mixed-types column, all-null column, single-row file, German decimals (`1.234,56`), leading-zero IDs, embedded newlines in quoted fields, ragged rows.
+- `structai_core.io.readers` — `Reader` ABC + `CSVReader` / `TSVReader` over Polars `scan_csv`. `infer_schema_length=0` reads every column as Utf8 so leading zeros and European decimals survive into the profiler's type inference. Ragged rows raise `RaggedRowError` with the offending Polars message. `open_reader(path, sniff)` picks CSV vs TSV by delimiter.
 - Initial implementation plan in `plans/plan.md` covering architecture, tech choices, phased build, and open questions.
 - `.gitignore` for Python tooling and local agent state.
 - This changelog.

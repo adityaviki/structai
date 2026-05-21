@@ -74,7 +74,7 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 
 ### `packages/core/io/`
 - [x] `sniff.py` — encoding detection, delimiter detection, header detection (CSV/TSV only)
-- [ ] `readers.py` — unified `Reader` interface; CSV and TSV implementations (Excel deferred to v1.1)
+- [x] `readers.py` — unified `Reader` interface; CSV and TSV implementations (Excel deferred to v1.1)
 
 ### `packages/core/profile/` — deterministic profile *(plan §5)*
 - [ ] `columns.py` — per-column compute: `name`, `position`, `inferred_type`, `null_count`, `null_rate`, empty-string-vs-null distinction
@@ -131,7 +131,7 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 
 ### Tests
 - [x] `tests/io/test_sniff.py` — per fixture: encoding, delimiter, header detection
-- [ ] `tests/io/test_readers.py` — CSV and TSV `Reader` round-trip; ragged rows raise; embedded newlines in quoted fields preserved
+- [x] `tests/io/test_readers.py` — CSV and TSV `Reader` round-trip; ragged rows raise; embedded newlines in quoted fields preserved
 - [ ] `tests/profile/test_types.py` — leading-zero detection; decimal/thousands separator; currency / percent / unit; **type-preservation rule** (ZIPs, SKUs stay `string` even when number-looking)
 - [ ] `tests/profile/test_patterns.py` — date format candidates with parse success rates; pattern hits per regex
 - [ ] `tests/profile/test_heuristics.py` — PK score per fixture matches hand-labeled expectation; outlier extraction works without crashing on all-null columns
