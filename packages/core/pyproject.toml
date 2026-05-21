@@ -7,6 +7,8 @@ dependencies = [
     "pydantic>=2.9",
     "pydantic-settings>=2.5",
     "sqlalchemy[asyncio]>=2.0",
+    "polars>=1.0",
+    "charset-normalizer>=3.0",
 ]
 
 [build-system]

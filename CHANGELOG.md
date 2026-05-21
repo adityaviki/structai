@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Phase 1 dependencies: `polars>=1.0` and `charset-normalizer>=3.0` in `packages/core` (profiler + sniffer), `python-multipart>=0.0.9` in `apps/api` (FastAPI multipart upload).
+- `uv.lock` checked in to pin the resolved workspace dependency set across environments.
 - Initial implementation plan in `plans/plan.md` covering architecture, tech choices, phased build, and open questions.
 - `.gitignore` for Python tooling and local agent state.
 - This changelog.
