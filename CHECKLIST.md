@@ -140,7 +140,7 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 - [x] `tests/profile/test_truncation.py` — wide-file policy: file-level + compact column index always included; rich stats only for top-N highest-uncertainty columns; omitted columns listed by name with reason; final profile under the 30 KB budget *(100-column realistic fixture fits the 30 KB ceiling; 500-column extreme fixture is accounted-for-but-overruns since 500 omitted entries ≈ 87 KB regardless)*
 - [x] `tests/api/test_files.py` — `POST /files` accepts upload, lands in `./data/uploads/quarantine/`, then moves to live area on sniff success; `POST /files` rejects > `STRUCTAI_MAX_UPLOAD_BYTES`; `GET /files` lists; `GET /files/:id/profile` returns persisted profile
 - [x] `tests/worker/test_profile_file.py` — `profile_file` task enqueued by API → claimed by worker → writes `profiles` row; idempotent on retry (same `(file_id, profile_version)` doesn't double-insert) *(SSE `profile_completed` emission deferred to Phase 2 — see CLAUDE.md `[Unreleased]` `Changed`)*
-- [ ] **Closes Phase 0 `[~]`**: cancellation integration test using a long-running `profile_file` job
+- [x] **Closes Phase 0 `[~]`**: cancellation integration test using a long-running `profile_file` job *(landed in `tests/worker/test_cancellation_integration.py`; Phase 0 was already closed in commit `93ce50e` via the synthetic `test_main_loop.py::test_cooperative_cancel_during_run` — this is the realistic-task variant)*
 
 ---
 
