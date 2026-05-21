@@ -108,10 +108,10 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 - [ ] `profile_file` task in `apps/worker/tasks.py` dispatching into `packages/core/profile/`
 
 ### API
-- [ ] `POST /files` — multipart upload, lands in `./data/uploads/quarantine/`, then moves to live area after sniffing succeeds
-- [ ] `POST /files` — enforces upload size limit (default 200 MB, configurable)
-- [ ] `GET /files` — list with status
-- [ ] `GET /files/:id/profile` — returns the profile JSON
+- [x] `POST /files` — multipart upload, lands in `./data/uploads/quarantine/`, then moves to live area after sniffing succeeds
+- [x] `POST /files` — enforces upload size limit (default 200 MB, configurable)
+- [x] `GET /files` — list with status
+- [x] `GET /files/:id/profile` — returns the profile JSON
 
 ### UI
 - [ ] `apps/web/src/components/FileManager.tsx` — drag-drop upload
@@ -138,7 +138,7 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 - [x] `tests/profile/test_pii.py` — high-confidence detectors fire for every positive fixture; do NOT fire for negative fixtures; `name_like` / `address_like` flagged as best-effort; redaction replaces sample values **and** top-K with `<EMAIL_N>`-style placeholders; raw values survive in local artifact; `STRUCTAI_ALLOW_RAW_LLM_SAMPLES=true` round-trips raw
 - [x] `tests/schema/test_identifiers.py` — sanitization (trim, NFKC, collapse, lowercase, leading-digit, reserved-word rewrite); collision suffixing; raw→safe mapping persisted on profile
 - [x] `tests/profile/test_truncation.py` — wide-file policy: file-level + compact column index always included; rich stats only for top-N highest-uncertainty columns; omitted columns listed by name with reason; final profile under the 30 KB budget *(100-column realistic fixture fits the 30 KB ceiling; 500-column extreme fixture is accounted-for-but-overruns since 500 omitted entries ≈ 87 KB regardless)*
-- [ ] `tests/api/test_files.py` — `POST /files` accepts upload, lands in `./data/uploads/quarantine/`, then moves to live area on sniff success; `POST /files` rejects > `STRUCTAI_MAX_UPLOAD_BYTES`; `GET /files` lists; `GET /files/:id/profile` returns persisted profile
+- [x] `tests/api/test_files.py` — `POST /files` accepts upload, lands in `./data/uploads/quarantine/`, then moves to live area on sniff success; `POST /files` rejects > `STRUCTAI_MAX_UPLOAD_BYTES`; `GET /files` lists; `GET /files/:id/profile` returns persisted profile
 - [ ] `tests/worker/test_profile_file.py` — `profile_file` task enqueued by API → claimed by worker → writes `profiles` row → emits `profile_completed` event; idempotent on retry (same `(file_id, profile_version)` doesn't double-insert)
 - [ ] **Closes Phase 0 `[~]`**: cancellation integration test using a long-running `profile_file` job
 
