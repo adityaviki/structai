@@ -93,7 +93,7 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 - [x] `pii.py` — high-confidence detectors: `email`, `phone`, `ip`, `national_id`, `cc_like`
 - [x] `pii.py` — best-effort detectors: `name_like`, `address_like` (surfaced as warnings, not guarantees)
 - [x] `pii.py` — **default redaction** for any LLM-bound surface: typed placeholders (`<EMAIL_1>`, `<PHONE_3>`) on sample values **and** top-K values
-- [~] `pii.py` — raw values written only to local profile artifacts under `./data/profiles/` *(redact_column is pure; disk-write happens in worker tasks_profile.py, step 11)*
+- [x] `pii.py` — raw values written only to local profile artifacts under `./data/profiles/` *(worker `tasks_profile.py` writes `<profile_sha>.raw.json` next to the redacted JSONB)*
 - [x] `pii.py` — honors `STRUCTAI_ALLOW_RAW_LLM_SAMPLES=true` dev opt-out *(via `allow_raw` parameter; runner threads `Settings.allow_raw_llm_samples` through in step 9)*
 - [x] **Wide-file truncation policy** (plan §5): file-level stats always; compact column index always; rich stats only for top-N highest-uncertainty columns; omitted columns listed by name with reason; target <30 KB
 
@@ -105,7 +105,7 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 - [x] `row_count`, `duplicate_row_count`, `encoding`, `delimiter`, `has_header`, `source_sha256`, `profile_sha256`, `profile_version`
 
 ### Worker task
-- [ ] `profile_file` task in `apps/worker/tasks.py` dispatching into `packages/core/profile/`
+- [x] `profile_file` task in `apps/worker/tasks.py` dispatching into `packages/core/profile/` *(lives in `apps/worker/tasks_profile.py`; main.py imports it for the `@register` side effect)*
 
 ### API
 - [x] `POST /files` — multipart upload, lands in `./data/uploads/quarantine/`, then moves to live area after sniffing succeeds
@@ -139,7 +139,7 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 - [x] `tests/schema/test_identifiers.py` — sanitization (trim, NFKC, collapse, lowercase, leading-digit, reserved-word rewrite); collision suffixing; raw→safe mapping persisted on profile
 - [x] `tests/profile/test_truncation.py` — wide-file policy: file-level + compact column index always included; rich stats only for top-N highest-uncertainty columns; omitted columns listed by name with reason; final profile under the 30 KB budget *(100-column realistic fixture fits the 30 KB ceiling; 500-column extreme fixture is accounted-for-but-overruns since 500 omitted entries ≈ 87 KB regardless)*
 - [x] `tests/api/test_files.py` — `POST /files` accepts upload, lands in `./data/uploads/quarantine/`, then moves to live area on sniff success; `POST /files` rejects > `STRUCTAI_MAX_UPLOAD_BYTES`; `GET /files` lists; `GET /files/:id/profile` returns persisted profile
-- [ ] `tests/worker/test_profile_file.py` — `profile_file` task enqueued by API → claimed by worker → writes `profiles` row → emits `profile_completed` event; idempotent on retry (same `(file_id, profile_version)` doesn't double-insert)
+- [x] `tests/worker/test_profile_file.py` — `profile_file` task enqueued by API → claimed by worker → writes `profiles` row; idempotent on retry (same `(file_id, profile_version)` doesn't double-insert) *(SSE `profile_completed` emission deferred to Phase 2 — see CLAUDE.md `[Unreleased]` `Changed`)*
 - [ ] **Closes Phase 0 `[~]`**: cancellation integration test using a long-running `profile_file` job
 
 ---

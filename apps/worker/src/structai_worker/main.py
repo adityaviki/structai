@@ -33,6 +33,7 @@ from structai_core.jobs.cancellation import JobCancelled
 from structai_core.jobs.queue import cancel, claim_one, complete, fail
 from structai_core.jobs.reaper import reap_stale
 
+from structai_worker import tasks_profile  # noqa: F401  — registers profile_file
 from structai_worker.lease import run_heartbeat
 from structai_worker.tasks import dispatch
 
