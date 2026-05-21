@@ -81,13 +81,13 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 - [ ] `columns.py` — `distinct_count` over full data, `cardinality_class`, `min`, `max`, quantiles (`p1`, `p50`, `p99`)
 - [ ] `columns.py` — top-K (K=10) with counts for low-cardinality columns
 - [ ] `columns.py` — string length stats (min, max, p50, p99)
-- [ ] `types.py` — type inference incl. **leading-zero detection** (ZIPs, SKUs stay `string`)
-- [ ] `types.py` — **decimal / thousands separator detection** (`1.234,56` vs `1,234.56`)
-- [ ] `types.py` — currency / percent / unit detection
-- [ ] `types.py` — **type-preservation rule**: number-looking columns that fail PK / range but pass leading-zero or fixed-width checks stay `string`
-- [ ] `patterns.py` — regex bank, `pattern_hits` per column
-- [ ] `patterns.py` — **date format candidates** with parse success rates
-- [ ] `patterns.py` — timezone hints (offsets seen, naive vs aware)
+- [x] `types.py` — type inference incl. **leading-zero detection** (ZIPs, SKUs stay `string`)
+- [x] `types.py` — **decimal / thousands separator detection** (`1.234,56` vs `1,234.56`)
+- [~] `types.py` — currency / percent / unit detection *(currency + percent done; `unit_hint` like `kg` / `lb` deferred)*
+- [x] `types.py` — **type-preservation rule**: number-looking columns that fail PK / range but pass leading-zero or fixed-width checks stay `string` *(leading-zero arm wired; fixed-width arm deferred until a fixture needs it)*
+- [x] `patterns.py` — regex bank, `pattern_hits` per column
+- [x] `patterns.py` — **date format candidates** with parse success rates
+- [x] `patterns.py` — timezone hints (offsets seen, naive vs aware)
 - [ ] `heuristics.py` — **PK score** (uniqueness + non-null + stable-looking ID)
 - [ ] `heuristics.py` — outlier examples (extreme values; redacted if PII)
 - [ ] `pii.py` — high-confidence detectors: `email`, `phone`, `ip`, `national_id`, `cc_like`
@@ -132,8 +132,8 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 ### Tests
 - [x] `tests/io/test_sniff.py` — per fixture: encoding, delimiter, header detection
 - [x] `tests/io/test_readers.py` — CSV and TSV `Reader` round-trip; ragged rows raise; embedded newlines in quoted fields preserved
-- [ ] `tests/profile/test_types.py` — leading-zero detection; decimal/thousands separator; currency / percent / unit; **type-preservation rule** (ZIPs, SKUs stay `string` even when number-looking)
-- [ ] `tests/profile/test_patterns.py` — date format candidates with parse success rates; pattern hits per regex
+- [x] `tests/profile/test_types.py` — leading-zero detection; decimal/thousands separator; currency / percent / unit; **type-preservation rule** (ZIPs, SKUs stay `string` even when number-looking)
+- [x] `tests/profile/test_patterns.py` — date format candidates with parse success rates; pattern hits per regex
 - [ ] `tests/profile/test_heuristics.py` — PK score per fixture matches hand-labeled expectation; outlier extraction works without crashing on all-null columns
 - [ ] `tests/profile/test_pii.py` — high-confidence detectors fire for every positive fixture; do NOT fire for negative fixtures; `name_like` / `address_like` flagged as best-effort; redaction replaces sample values **and** top-K with `<EMAIL_N>`-style placeholders; raw values survive in local artifact; `STRUCTAI_ALLOW_RAW_LLM_SAMPLES=true` round-trips raw
 - [x] `tests/schema/test_identifiers.py` — sanitization (trim, NFKC, collapse, lowercase, leading-digit, reserved-word rewrite); collision suffixing; raw→safe mapping persisted on profile
