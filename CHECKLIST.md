@@ -70,7 +70,7 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 
 ---
 
-## Phase 1 — CSV/TSV profiler + file manager *(plan §10, 3 days)*
+## Phase 1 — CSV/TSV profiler + file manager *(plan §10, 3 days)* *(done 2026-05-22)*
 
 ### `packages/core/io/`
 - [x] `sniff.py` — encoding detection, delimiter detection, header detection (CSV/TSV only)

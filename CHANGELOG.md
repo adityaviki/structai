@@ -50,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAPI codegen wired end-to-end: `apps/api/src/structai_api/export_openapi.py` prints the FastAPI schema to stdout (no running server required), `make openapi-gen` pipes it through `openapi-typescript` into `apps/web/src/api/schema.ts`, and `apps/web/src/api/client.ts` exports an `openapi-fetch` instance typed against those `paths`. Initial scaffold covers `/healthz`; `apps/web/src/App.tsx` calls it to prove the round-trip works end-to-end.
 
 ### Changed
+- **Phase 1 closed** (2026-05-22). `CHECKLIST.md` Phase 1 marked done; 227 backend tests + 2 frontend tests + `pnpm --filter @structai/web build` all green.
+- `CHECKLIST.md` line 142 rewritten to drop the SSE `profile_completed` clause — `event_log.session_id` is a NOT-NULL FK to `agent_sessions`, which doesn't exist until Phase 2, so file-scoped events are deferred there. The idempotency clause on `(file_id, profile_version)` stays.
 - Tests are now a first-class deliverable on `CHECKLIST.md`. Every phase (Phase 0 through Hardening) gained an explicit `### Tests` subsection; an implementation item cannot go to `[x]` until its tests pass, and a phase is not "done" until the whole Tests subsection is green. `CLAUDE.md` documents the test layout (`tests/<package>/` mirrors source, web tests under `apps/web/src/__tests__/`), the cadence (`make test-py` / `make test-ts` on every commit; `pytest -m eval` slower track), and the `structai_test` database convention. Phase 0 implementation already shipped, but its Tests subsection is `[ ]` and gates closing out the phase.
 - `make test-py` now depends on `make db-up` so the test conftest can reach Postgres; `psycopg[binary]` added to the root dev group.
 
