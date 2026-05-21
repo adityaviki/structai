@@ -99,10 +99,10 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 
 ### `packages/core/schema/`
 - [x] `identifiers.py` — column-name sanitization: trim, NFKC normalize, replace non-alphanum with `_`, collapse repeats, lowercase, prepend `_` if starts with digit, suffix `_N` on collisions, reject Postgres reserved words (rewrite with `_col` suffix)
-- [~] Raw→safe column-name mapping persisted on the profile so the UI and IR both see it *(sanitize_columns ready; persistence wired by profile/runner in step 9)*
+- [x] Raw→safe column-name mapping persisted on the profile so the UI and IR both see it *(persisted on `FileProfile.raw_to_safe` by the runner)*
 
 ### File-level profile fields
-- [ ] `row_count`, `duplicate_row_count`, `encoding`, `delimiter`, `has_header`, `source_sha256`, `profile_sha256`, `profile_version`
+- [x] `row_count`, `duplicate_row_count`, `encoding`, `delimiter`, `has_header`, `source_sha256`, `profile_sha256`, `profile_version`
 
 ### Worker task
 - [ ] `profile_file` task in `apps/worker/tasks.py` dispatching into `packages/core/profile/`
@@ -134,7 +134,7 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 - [x] `tests/io/test_readers.py` — CSV and TSV `Reader` round-trip; ragged rows raise; embedded newlines in quoted fields preserved
 - [x] `tests/profile/test_types.py` — leading-zero detection; decimal/thousands separator; currency / percent / unit; **type-preservation rule** (ZIPs, SKUs stay `string` even when number-looking)
 - [x] `tests/profile/test_patterns.py` — date format candidates with parse success rates; pattern hits per regex
-- [~] `tests/profile/test_heuristics.py` — PK score per fixture matches hand-labeled expectation; outlier extraction works without crashing on all-null columns *(PK-score unit tests in place; per-fixture + outlier coverage adds with `profile/columns.py` step 8 and the end-to-end runner step 9)*
+- [x] `tests/profile/test_heuristics.py` — PK score per fixture matches hand-labeled expectation; outlier extraction works without crashing on all-null columns *(per-fixture and outlier coverage exercised end-to-end via `tests/profile/test_profile_runner.py`)*
 - [x] `tests/profile/test_pii.py` — high-confidence detectors fire for every positive fixture; do NOT fire for negative fixtures; `name_like` / `address_like` flagged as best-effort; redaction replaces sample values **and** top-K with `<EMAIL_N>`-style placeholders; raw values survive in local artifact; `STRUCTAI_ALLOW_RAW_LLM_SAMPLES=true` round-trips raw
 - [x] `tests/schema/test_identifiers.py` — sanitization (trim, NFKC, collapse, lowercase, leading-digit, reserved-word rewrite); collision suffixing; raw→safe mapping persisted on profile
 - [x] `tests/profile/test_truncation.py` — wide-file policy: file-level + compact column index always included; rich stats only for top-N highest-uncertainty columns; omitted columns listed by name with reason; final profile under the 30 KB budget *(100-column realistic fixture fits the 30 KB ceiling; 500-column extreme fixture is accounted-for-but-overruns since 500 omitted entries ≈ 87 KB regardless)*
