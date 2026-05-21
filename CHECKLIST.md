@@ -73,7 +73,7 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 ## Phase 1 — CSV/TSV profiler + file manager *(plan §10, 3 days)*
 
 ### `packages/core/io/`
-- [ ] `sniff.py` — encoding detection, delimiter detection, header detection (CSV/TSV only)
+- [x] `sniff.py` — encoding detection, delimiter detection, header detection (CSV/TSV only)
 - [ ] `readers.py` — unified `Reader` interface; CSV and TSV implementations (Excel deferred to v1.1)
 
 ### `packages/core/profile/` — deterministic profile *(plan §5)*
@@ -119,18 +119,18 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 - [ ] Profile drawer showing per-column stats with PII placeholders visible
 
 ### Fixture suite — CSV/TSV only
-- [ ] BOM
-- [ ] Semicolon-delimited
-- [ ] Mixed-types column
-- [ ] All-null column
-- [ ] Single-row file
-- [ ] German decimals (`1.234,56`)
-- [ ] Leading-zero IDs
-- [ ] Embedded newlines in quoted fields
-- [ ] Ragged rows
+- [x] BOM
+- [x] Semicolon-delimited
+- [x] Mixed-types column
+- [x] All-null column
+- [x] Single-row file
+- [x] German decimals (`1.234,56`)
+- [x] Leading-zero IDs
+- [x] Embedded newlines in quoted fields
+- [x] Ragged rows
 
 ### Tests
-- [ ] `tests/io/test_sniff.py` — per fixture: encoding, delimiter, header detection
+- [x] `tests/io/test_sniff.py` — per fixture: encoding, delimiter, header detection
 - [ ] `tests/io/test_readers.py` — CSV and TSV `Reader` round-trip; ragged rows raise; embedded newlines in quoted fields preserved
 - [ ] `tests/profile/test_types.py` — leading-zero detection; decimal/thousands separator; currency / percent / unit; **type-preservation rule** (ZIPs, SKUs stay `string` even when number-looking)
 - [ ] `tests/profile/test_patterns.py` — date format candidates with parse success rates; pattern hits per regex

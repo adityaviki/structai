@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Phase 1 dependencies: `polars>=1.0` and `charset-normalizer>=3.0` in `packages/core` (profiler + sniffer), `python-multipart>=0.0.9` in `apps/api` (FastAPI multipart upload).
 - `uv.lock` checked in to pin the resolved workspace dependency set across environments.
+- `structai_core.io.sniff` — CSV/TSV sniffer: BOM detection, encoding via `charset-normalizer` (ASCII normalized to UTF-8 for downstream), delimiter via per-line vote across `,;\t|` cross-checked with `csv.Sniffer`, header heuristic via per-column numeric-vs-string comparison, CRLF / LF line terminator detection. `SniffError` on empty / undecodable input.
+- 9 CSV/TSV fixtures under `tests/fixtures/csv/`: BOM, semicolon-delimited, mixed-types column, all-null column, single-row file, German decimals (`1.234,56`), leading-zero IDs, embedded newlines in quoted fields, ragged rows.
 - Initial implementation plan in `plans/plan.md` covering architecture, tech choices, phased build, and open questions.
 - `.gitignore` for Python tooling and local agent state.
 - This changelog.
