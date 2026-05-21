@@ -114,9 +114,9 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 - [x] `GET /files/:id/profile` — returns the profile JSON
 
 ### UI
-- [ ] `apps/web/src/components/FileManager.tsx` — drag-drop upload
-- [ ] File list with profiling status
-- [ ] Profile drawer showing per-column stats with PII placeholders visible
+- [x] `apps/web/src/components/FileManager.tsx` — drag-drop upload
+- [x] File list with profiling status
+- [x] Profile drawer showing per-column stats with PII placeholders visible
 
 ### Fixture suite — CSV/TSV only
 - [x] BOM

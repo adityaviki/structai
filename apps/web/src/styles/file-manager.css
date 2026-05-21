@@ -1,0 +1,436 @@
+/* Hand-written stylesheet for the Phase 1 file manager UI. BEM-ish. */
+
+:root {
+  --bg: #fafafa;
+  --fg: #1f2937;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --accent: #2563eb;
+  --queued: #6b7280;
+  --profiling: #ca8a04;
+  --profiled: #16a34a;
+  --failed: #dc2626;
+  --code-bg: #f3f4f6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-size: 14px;
+}
+
+code {
+  background: var(--code-bg);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
+  font-size: 12px;
+}
+
+kbd {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+/* --- File Manager root ------------------------------------------------- */
+.fm {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.fm__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+
+.fm__header h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.fm__build {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.fm__main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* --- Dropzone --------------------------------------------------------- */
+.dz {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  padding: 32px;
+  text-align: center;
+  cursor: pointer;
+  background: white;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.dz:hover,
+.dz:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.dz--active {
+  border-color: var(--accent);
+  background: #eef2ff;
+}
+
+.dz--busy {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.dz__err {
+  color: var(--failed);
+}
+
+/* --- File List -------------------------------------------------------- */
+.fl {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.fl thead {
+  background: #f9fafb;
+  text-align: left;
+}
+
+.fl th,
+.fl td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-weight: normal;
+}
+
+.fl tbody tr {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.fl tbody tr:hover,
+.fl tbody tr:focus {
+  background: #f3f4f6;
+  outline: none;
+}
+
+.fl tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.fl--empty {
+  text-align: center;
+  padding: 48px 0;
+  color: var(--muted);
+}
+
+/* --- Status Badge ----------------------------------------------------- */
+.sb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid currentColor;
+}
+
+.sb__symbol {
+  font-family: monospace;
+}
+
+.sb--queued {
+  color: var(--queued);
+}
+.sb--profiling {
+  color: var(--profiling);
+}
+.sb--profiled {
+  color: var(--profiled);
+}
+.sb--failed {
+  color: var(--failed);
+}
+
+/* --- Profile Drawer --------------------------------------------------- */
+.pd__scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.3);
+  z-index: 10;
+}
+
+.pd {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(620px, 90vw);
+  background: white;
+  border-left: 1px solid var(--border);
+  z-index: 11;
+  overflow-y: auto;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.06);
+}
+
+.pd__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 1;
+}
+
+.pd__header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.pd__close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 8px;
+}
+
+.pd__msg,
+.pd__error {
+  padding: 20px;
+  color: var(--muted);
+}
+
+.pd__error p {
+  color: var(--failed);
+}
+
+.pd__body {
+  padding: 20px;
+}
+
+.pd__file-stats dl {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 16px;
+  margin: 0 0 16px;
+}
+
+.pd__stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.pd__stat dt {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pd__stat dd {
+  margin: 0;
+  font-size: 13px;
+}
+
+.pd__notice {
+  background: #fef3c7;
+  border-left: 3px solid var(--profiling);
+  padding: 8px 12px;
+  margin: 12px 0;
+  font-size: 12px;
+}
+
+.pd__columns h3,
+.pd__omitted h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 20px 0 8px;
+}
+
+.pd__omitted ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+/* --- Column Card ------------------------------------------------------ */
+.cc {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin: 0 0 12px;
+}
+
+.cc__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.cc__head h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.cc__safe {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.cc__badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cc__type,
+.cc__pii,
+.cc__pk,
+.cc__trunc {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.cc__type {
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.cc__type small {
+  margin-left: 4px;
+  opacity: 0.7;
+}
+
+.cc__pii {
+  background: #fef2f2;
+  color: var(--failed);
+}
+
+.cc__pk {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.cc__trunc {
+  background: var(--code-bg);
+  color: var(--muted);
+}
+
+.cc__stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px 16px;
+  margin: 0 0 8px;
+}
+
+.cc__stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.cc__stat dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.cc__stat dd {
+  margin: 0;
+  font-size: 12px;
+}
+
+.cc h4 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 10px 0 4px;
+}
+
+.cc__samples,
+.cc__topk {
+  margin: 0 0 4px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cc__topk {
+  flex-direction: column;
+  gap: 2px;
+  align-items: stretch;
+}
+
+.cc__topk li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.cc__topk span {
+  color: var(--muted);
+}
+
+.cc__more {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.cc__patterns,
+.cc__warn {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.cc__warn {
+  color: var(--profiling);
+}

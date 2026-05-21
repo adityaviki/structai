@@ -19,6 +19,8 @@ venv/
 node_modules/
 .pnpm-store/
 *.tsbuildinfo
+apps/web/vite.config.js
+apps/web/vite.config.d.ts
 
 # Tooling
 .ruff_cache/

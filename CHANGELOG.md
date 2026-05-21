@@ -27,6 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `apps/worker/tasks_profile.py` — `@register("profile_file")` async task: load `files` row → idempotency precheck against `profiles` → sniff via `to_thread` → run `structai_core.profile.runner.profile_file` → write `<profile_sha>.raw.json` to `./data/profiles/` → insert redacted JSONB into `profiles`. Errors: `RaggedRowError` / `SniffError` → `TerminalError`; OS write failure → `RetryableError`; `JobCancelled` propagates to the worker's main loop. `apps/worker/main.py` imports the module for the side-effect-only `@register`.
 - `tests/worker/test_cancellation_integration.py` — realistic-task cancellation integration: 60-column × 5000-row CSV generated on the fly, profile_file job enqueued, `_process_one` running with the heartbeat thread, `request_cancel` mid-flight. Asserts the job lands in `cancelled` and no `profiles` row was inserted. (Phase 0 was already closed by the synthetic loop in `test_main_loop.py`; this is the Polars-driven variant.)
 - `apps/web/src/api/schema.ts` regenerated against the new `/files` routes — `FileSummary`, `FileListResponse`, `FileStatus`, `FileProfile`, `ColumnProfile`, `OmittedColumn`, `TopKEntry`, `LengthStats`, `Quantiles`, `InferredType`, `CardinalityClass`, `PiiClass` all flow through to the TypeScript client.
+- Phase 1 file-manager UI:
+  - `apps/web/src/components/Dropzone.tsx` — `react-dropzone` wrapper, accepts `.csv` / `.tsv` / `.txt`, client-side size cap synced with `Settings.max_upload_bytes`, keyboard-accessible.
+  - `apps/web/src/components/FileList.tsx` + `StatusBadge.tsx` — table of uploads with name / size / relative time / status; rows are keyboard-activatable. Color + symbol-based status badges so colorblind users still differentiate.
+  - `apps/web/src/components/ColumnCard.tsx` — renders every per-column field from plan §5 (samples render `<EMAIL_N>` placeholders literally, expandable top-K, decimal / currency / percent hints in the type badge, PK-candidate pill at ≥ 0.9, PII badge).
+  - `apps/web/src/components/ProfileDrawer.tsx` — fixed-right drawer with focus trap, Escape-to-close, polling state for "profiling in progress", file-level stats header, and an omitted-columns tail when wide-file truncation kicks in.
+  - `apps/web/src/components/FileManager.tsx` — page root tying it all together, owns upload state, refetches files on success.
+  - `apps/web/src/lib/{format,useFiles,useProfile}.ts` — `humanBytes` / `relativeTime` / `pct` / `cn` / `stringifyError` helpers; polling hooks (2 s interval; turns off when nothing pending; pauses while a request is in flight).
+  - `apps/web/src/styles/file-manager.css` — single hand-written stylesheet (BEM-ish). No UI library / no Tailwind / no `clsx` dep.
+- `react-dropzone@^15` added to `apps/web/package.json`.
 - Initial implementation plan in `plans/plan.md` covering architecture, tech choices, phased build, and open questions.
 - `.gitignore` for Python tooling and local agent state.
 - This changelog.
