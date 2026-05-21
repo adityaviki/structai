@@ -13,32 +13,32 @@ The **web UI is the primary surface**: a file manager for uploads, a chat sideba
 
 ### v1 scope (deliberately small)
 
-v1 is the **CSV/TSV single-table loop**: upload → profile → agent proposes a single-table IR → schema review → dry-run → `COPY` load → validate → browse. Excel, normalization (splitting into multiple tables with FKs), and reuse of prior pipelines are explicit follow-on milestones (v1.1 → v1.3). The phased build (§10) reflects this.
+V1 is the **CSV/TSV single-table loop**: upload → profile → agent proposes a single-table IR → schema review → dry-run → `COPY` load → validate → browse. Excel, normalization (splitting into multiple tables with FKs), and reuse of prior pipelines are explicit follow-on milestones (v1.1 → v1.3). The phased build (§10) reflects this.
 
 ## 2. Tech choices
 
-| Concern | Choice | Why |
-|---|---|---|
-| Repo layout | **Monorepo** (`apps/api`, `apps/web`, `apps/worker`, `packages/core`) | Coordinated releases, shared OpenAPI types, isolated worker process |
-| Backend language | Python 3.12 | Polars/pandas/openpyxl/SQLAlchemy/LangChain ecosystem |
-| Backend framework | **FastAPI** + `uvicorn` | **Orchestration only** — no heavy work inline |
-| Worker | Separate Python process, **Postgres-backed job queue** via `SELECT ... FOR UPDATE SKIP LOCKED` | Profiling, agent loops, COPY loads, validation are long-running and need cancellation, retries, leases, and persisted progress; reusing Postgres avoids a Redis dep |
-| Backend pkg mgr | `uv` with workspaces | Shared lockfile across api / worker / core |
-| Frontend | **React 18 + Vite + TypeScript** | Modern, fast dev loop |
-| Frontend pkg mgr | `pnpm` workspaces | Native workspace support |
-| Data engine | **Polars** for profiling and transforms, **pandas** in exported scripts | Polars is fast; pandas is the literacy expectation |
-| Excel reader (v1.1+) | **`calamine`** (xls / xlsx / xlsm / xlsb / ods), `openpyxl` fallback for formula-only cases | Calamine covers the full Excel range; `xlrd` is dropped |
-| Loader | **PostgreSQL `COPY FROM STDIN`** via **`psycopg3`** in the worker | Native, fast; psycopg3 has first-class async `COPY` support. The API uses SQLAlchemy/asyncpg for typed ORM access; the worker uses psycopg3 specifically for the load path |
-| Database | **PostgreSQL 16** only | Realistic target; identity columns, `ON CONFLICT`, JSONB, schemas |
-| DB layer (API) | SQLAlchemy 2.x + `asyncpg` | Typed ORM + async driver |
-| Artifact storage | Local FS under `./data/` for v1 (`uploads/`, `profiles/`, `pipelines/`, `manifests/`, `rejected_rows/`); S3-compatible layout for later | Simple to start; directory layout is S3-ready |
-| LLM | `claude-haiku-4-5` by default, escalate to `claude-opus-4-7` only for ambiguous decisions; cost tracked per session | Haiku-first keeps cost predictable |
-| Agent framework | **LangChain** (`langchain-anthropic`) with **LangGraph** | Tool calling, callbacks, streaming; isolated behind `packages/core/agent/` so the framework is swappable |
-| Realtime | SSE from FastAPI to React backed by a **persisted event log in Postgres** | Stream + survive client reconnects |
-| CLI (secondary) | `typer` | Power users; same `packages/core` underneath |
-| Tests (Python) | `pytest` + fixture files + golden snapshots | Real CSV/XLSX in `tests/fixtures/` |
-| Tests (TS) | `vitest` + React Testing Library | Same runtime as Vite |
-| Lint/format | `ruff` (Python), `biome` (TS) | One tool each, fast |
+| Concern              | Choice                                                                                                                                              | Why                                                                                                                                                                          |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repo layout          | **Monorepo** (`apps/api`, `apps/web`, `apps/worker`, `packages/core`)                                                                 | Coordinated releases, shared OpenAPI types, isolated worker process                                                                                                          |
+| Backend language     | Python 3.12                                                                                                                                         | Polars/pandas/openpyxl/SQLAlchemy/LangChain ecosystem                                                                                                                        |
+| Backend framework    | **FastAPI** + `uvicorn`                                                                                                                     | **Orchestration only** — no heavy work inline                                                                                                                         |
+| Worker               | Separate Python process,**Postgres-backed job queue** via `SELECT ... FOR UPDATE SKIP LOCKED`                                               | Profiling, agent loops, COPY loads, validation are long-running and need cancellation, retries, leases, and persisted progress; reusing Postgres avoids a Redis dep          |
+| Backend pkg mgr      | `uv` with workspaces                                                                                                                              | Shared lockfile across api / worker / core                                                                                                                                   |
+| Frontend             | **React 18 + Vite + TypeScript**                                                                                                              | Modern, fast dev loop                                                                                                                                                        |
+| Frontend pkg mgr     | `pnpm` workspaces                                                                                                                                 | Native workspace support                                                                                                                                                     |
+| Data engine          | **Polars** for profiling and transforms, **pandas** in exported scripts                                                                 | Polars is fast; pandas is the literacy expectation                                                                                                                           |
+| Excel reader (v1.1+) | **`calamine`** (xls / xlsx / xlsm / xlsb / ods), `openpyxl` fallback for formula-only cases                                               | Calamine covers the full Excel range;`xlrd` is dropped                                                                                                                     |
+| Loader               | **PostgreSQL `COPY FROM STDIN`** via **`psycopg3`** in the worker                                                                   | Native, fast; psycopg3 has first-class async `COPY` support. The API uses SQLAlchemy/asyncpg for typed ORM access; the worker uses psycopg3 specifically for the load path |
+| Database             | **PostgreSQL 16** only                                                                                                                        | Realistic target; identity columns,`ON CONFLICT`, JSONB, schemas                                                                                                           |
+| DB layer (API)       | SQLAlchemy 2.x +`asyncpg`                                                                                                                         | Typed ORM + async driver                                                                                                                                                     |
+| Artifact storage     | Local FS under `./data/` for v1 (`uploads/`, `profiles/`, `pipelines/`, `manifests/`, `rejected_rows/`); S3-compatible layout for later | Simple to start; directory layout is S3-ready                                                                                                                                |
+| LLM                  | `claude-haiku-4-5` by default, escalate to `claude-opus-4-7` only for ambiguous decisions; cost tracked per session                             | Haiku-first keeps cost predictable                                                                                                                                           |
+| Agent framework      | **LangChain** (`langchain-anthropic`) with **LangGraph**                                                                              | Tool calling, callbacks, streaming; isolated behind `packages/core/agent/` so the framework is swappable                                                                   |
+| Realtime             | SSE from FastAPI to React backed by a**persisted event log in Postgres**                                                                      | Stream + survive client reconnects                                                                                                                                           |
+| CLI (secondary)      | `typer`                                                                                                                                           | Power users; same `packages/core` underneath                                                                                                                               |
+| Tests (Python)       | `pytest` + fixture files + golden snapshots                                                                                                       | Real CSV/XLSX in `tests/fixtures/`                                                                                                                                         |
+| Tests (TS)           | `vitest` + React Testing Library                                                                                                                  | Same runtime as Vite                                                                                                                                                         |
+| Lint/format          | `ruff` (Python), `biome` (TS)                                                                                                                   | One tool each, fast                                                                                                                                                          |
 
 ## 3. Architecture
 
@@ -124,20 +124,20 @@ structai/
 
 Concrete Postgres tables (all use `bigint` identity PKs unless noted). Migrations land in Phase 0 so every later phase writes to a stable schema.
 
-| Table | Purpose | Key columns |
-|---|---|---|
-| `files` | One row per uploaded file | `id`, `original_name`, `bytes`, `source_sha256`, `quarantine_path`, `live_path`, `uploaded_at`, `retention_until` |
-| `profiles` | Deterministic profile of a file | `id`, `file_id` FK, `profile_sha256`, `profile_jsonb`, `created_at` |
-| `agent_sessions` | One per chat session against a file | `id`, `file_id` FK, `created_at`, `cost_tokens_in`, `cost_tokens_out`, `status` |
-| `pipeline_revisions` | IR revisions — `ir_jsonb` is immutable per row; `state` mutates in place | `id`, `session_id` FK, `parent_id` FK, `ir_version`, `ir_jsonb`, `ir_sha256`, `state` (see §6.4), `created_by` (`agent` / `user_edit`), `created_at` |
-| `pipeline_artifacts` | Generated artifacts derived from a revision (does **not** store the IR; canonical IR lives in `pipeline_revisions.ir_jsonb`) | `id`, `revision_id` FK, `kind` (`pipeline_py` / `manifest_json` / `dry_run_report`), `path`, `sha256` |
-| `jobs` | Worker job queue | `id`, `kind`, `payload_jsonb`, `idempotency_key`, `status`, `locked_at`, `locked_by`, `lease_expires_at`, `heartbeat_at`, `attempts`, `max_attempts`, `error_class` (`retryable` / `terminal`), `last_error`, `cancel_requested`, `created_at`, `finished_at` |
-| `event_log` | SSE event stream per session | `id` (bigserial, monotonic), `session_id` FK, `kind`, `payload_jsonb`, `created_at` |
-| `event_cursors` *(optional)* | Per-client replay cursors. SSE clients can resume via the `Last-Event-ID` header alone; this table is only needed for multi-device resume and is **not** wired in v1 by default | `session_id` FK, `client_id`, `last_event_id`, `updated_at` |
-| `import_runs` | One row per execution attempt | `id`, `revision_id` FK, `status`, `started_at`, `finished_at`, `dry_run_only` |
-| `import_run_tables` | Per-table outcome of a run | `id`, `run_id` FK, `table_name`, `load_mode`, `rows_inserted`, `rows_updated`, `rows_rejected` |
-| `rejected_row_artifacts` | Rejected rows per (run, table) | `id`, `run_id_table_id` FK, `path` (parquet), `count` |
-| `pipeline_registry` | Fingerprint index for reuse (v1.3) | `id`, `fingerprint`, `revision_id` FK, `last_seen_file_id` FK |
+| Table                            | Purpose                                                                                                                                                                                 | Key columns                                                                                                                                                                                                                                                                                       |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `files`                        | One row per uploaded file                                                                                                                                                               | `id`, `original_name`, `bytes`, `source_sha256`, `quarantine_path`, `live_path`, `uploaded_at`, `retention_until`                                                                                                                                                                 |
+| `profiles`                     | Deterministic profile of a file                                                                                                                                                         | `id`, `file_id` FK, `profile_sha256`, `profile_jsonb`, `created_at`                                                                                                                                                                                                                     |
+| `agent_sessions`               | One per chat session against a file                                                                                                                                                     | `id`, `file_id` FK, `created_at`, `cost_tokens_in`, `cost_tokens_out`, `status`                                                                                                                                                                                                       |
+| `pipeline_revisions`           | IR revisions —`ir_jsonb` is immutable per row; `state` mutates in place                                                                                                            | `id`, `session_id` FK, `parent_id` FK, `ir_version`, `ir_jsonb`, `ir_sha256`, `state` (see §6.4), `created_by` (`agent` / `user_edit`), `created_at`                                                                                                                       |
+| `pipeline_artifacts`           | Generated artifacts derived from a revision (does**not** store the IR; canonical IR lives in `pipeline_revisions.ir_jsonb`)                                                     | `id`, `revision_id` FK, `kind` (`pipeline_py` / `manifest_json` / `dry_run_report`), `path`, `sha256`                                                                                                                                                                             |
+| `jobs`                         | Worker job queue                                                                                                                                                                        | `id`, `kind`, `payload_jsonb`, `idempotency_key`, `status`, `locked_at`, `locked_by`, `lease_expires_at`, `heartbeat_at`, `attempts`, `max_attempts`, `error_class` (`retryable` / `terminal`), `last_error`, `cancel_requested`, `created_at`, `finished_at` |
+| `event_log`                    | SSE event stream per session                                                                                                                                                            | `id` (bigserial, monotonic), `session_id` FK, `kind`, `payload_jsonb`, `created_at`                                                                                                                                                                                                     |
+| `event_cursors` *(optional)* | Per-client replay cursors. SSE clients can resume via the `Last-Event-ID` header alone; this table is only needed for multi-device resume and is **not** wired in v1 by default | `session_id` FK, `client_id`, `last_event_id`, `updated_at`                                                                                                                                                                                                                               |
+| `import_runs`                  | One row per execution attempt                                                                                                                                                           | `id`, `revision_id` FK, `status`, `started_at`, `finished_at`, `dry_run_only`                                                                                                                                                                                                         |
+| `import_run_tables`            | Per-table outcome of a run                                                                                                                                                              | `id`, `run_id` FK, `table_name`, `load_mode`, `rows_inserted`, `rows_updated`, `rows_rejected`                                                                                                                                                                                      |
+| `rejected_row_artifacts`       | Rejected rows per (run, table)                                                                                                                                                          | `id`, `run_id_table_id` FK, `path` (parquet), `count`                                                                                                                                                                                                                                     |
+| `pipeline_registry`            | Fingerprint index for reuse (v1.3)                                                                                                                                                      | `id`, `fingerprint`, `revision_id` FK, `last_seen_file_id` FK                                                                                                                                                                                                                             |
 
 Invariants:
 
@@ -220,21 +220,21 @@ v1.2 adds `split_from`, `natural_key`, `foreign_keys`, and the `split_table` / `
 
 Each op has a strict pydantic schema and a contract that the interpreter enforces. Summary:
 
-| Op | Inputs | Outputs | Row count | Can reject? | Expression DSL? | Reversible? |
-|---|---|---|---|---|---|---|
-| `rename` | one column | renamed column | unchanged | no | — | yes |
-| `drop_column` | one column | (removed) | unchanged | no | — | yes |
-| `cast` | one column | typed column | unchanged | yes (`on_error: reject`) | — | partial (lossy) |
-| `parse_date` / `parse_datetime` | string column + format | date/datetime column | unchanged | yes | format string only | partial |
-| `normalize_string` | string column | normalized string | unchanged | no | trim/case flags only | no |
-| `map_enum` | string column + value→value map | normalized string | unchanged | optional (`on_unmapped: reject`) | static dict | partial |
-| `derive_column` | named columns + restricted DSL | new column | unchanged | yes on DSL error | **whitelisted DSL** (see below) | yes |
-| `reject_row` | predicate over named columns | (filtered) | **decreases** | **yes** | predicate DSL | logged |
-| `dedupe` | key columns | (filtered) | decreases | logs duplicates | — | logged |
-| `set_pk` | column(s) | metadata | unchanged | no | — | yes |
-| `set_upsert_key` | column(s) | metadata | unchanged | no | — | yes |
-| `split_table` *(v1.2)* | source columns | new table rows | unchanged in source, populates target | no | — | yes (auditable) |
-| `set_foreign_key` *(v1.2)* | columns + lookup spec | resolved FK column | unchanged | yes (lookup miss) | — | logged |
+| Op                                  | Inputs                           | Outputs              | Row count                             | Can reject?                        | Expression DSL?                       | Reversible?     |
+| ----------------------------------- | -------------------------------- | -------------------- | ------------------------------------- | ---------------------------------- | ------------------------------------- | --------------- |
+| `rename`                          | one column                       | renamed column       | unchanged                             | no                                 | —                                    | yes             |
+| `drop_column`                     | one column                       | (removed)            | unchanged                             | no                                 | —                                    | yes             |
+| `cast`                            | one column                       | typed column         | unchanged                             | yes (`on_error: reject`)         | —                                    | partial (lossy) |
+| `parse_date` / `parse_datetime` | string column + format           | date/datetime column | unchanged                             | yes                                | format string only                    | partial         |
+| `normalize_string`                | string column                    | normalized string    | unchanged                             | no                                 | trim/case flags only                  | no              |
+| `map_enum`                        | string column + value→value map | normalized string    | unchanged                             | optional (`on_unmapped: reject`) | static dict                           | partial         |
+| `derive_column`                   | named columns + restricted DSL   | new column           | unchanged                             | yes on DSL error                   | **whitelisted DSL** (see below) | yes             |
+| `reject_row`                      | predicate over named columns     | (filtered)           | **decreases**                   | **yes**                      | predicate DSL                         | logged          |
+| `dedupe`                          | key columns                      | (filtered)           | decreases                             | logs duplicates                    | —                                    | logged          |
+| `set_pk`                          | column(s)                        | metadata             | unchanged                             | no                                 | —                                    | yes             |
+| `set_upsert_key`                  | column(s)                        | metadata             | unchanged                             | no                                 | —                                    | yes             |
+| `split_table` *(v1.2)*          | source columns                   | new table rows       | unchanged in source, populates target | no                                 | —                                    | yes (auditable) |
+| `set_foreign_key` *(v1.2)*      | columns + lookup spec            | resolved FK column   | unchanged                             | yes (lookup miss)                  | —                                    | logged          |
 
 Null behavior is uniform: any op that reads a null produces a null **unless** the op's schema says otherwise (e.g. `reject_row where is_null`). `on_error` defaults to `reject` (row goes to rejected_rows) — `null` and `fail` are opt-in alternatives.
 
@@ -310,14 +310,14 @@ A LangGraph state machine using `langchain-anthropic`. The agent receives the pr
 
 ### Tools
 
-| Tool | Purpose |
-|---|---|
-| `get_column_samples(column, n, strategy)` | More samples (`random`, `nulls`, `extremes`, `regex_match`) — also redacted by default |
-| `count_values(column, where=None)` | Cardinality, top-K with counts |
-| `match_regex(column, pattern)` | Test a hypothesis |
-| `cross_tab(col_a, col_b)` *(v1.2)* | Detect functional dependencies for normalization splits |
-| `parse_as(column, target_type, format=None)` | Try parsing and report failure rate |
-| `propose_pipeline(ir)` | Submit the final IR (terminates the loop) |
+| Tool                                           | Purpose                                                                                         |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `get_column_samples(column, n, strategy)`    | More samples (`random`, `nulls`, `extremes`, `regex_match`) — also redacted by default |
+| `count_values(column, where=None)`           | Cardinality, top-K with counts                                                                  |
+| `match_regex(column, pattern)`               | Test a hypothesis                                                                               |
+| `cross_tab(col_a, col_b)` *(v1.2)*         | Detect functional dependencies for normalization splits                                         |
+| `parse_as(column, target_type, format=None)` | Try parsing and report failure rate                                                             |
+| `propose_pipeline(ir)`                       | Submit the final IR (terminates the loop)                                                       |
 
 ### Prompt-injection defenses
 
@@ -348,14 +348,14 @@ The worker runs the IR through `packages/core/execute/`:
 
 v1 ships four modes; `merge` and `version` are deferred to v1.3 alongside reuse, where natural-key matching and import-versioning genuinely become useful.
 
-| Mode | Available in | Behavior |
-|---|---|---|
-| `append` | v1 | `INSERT ... SELECT` from staging |
-| `replace` | v1 | `TRUNCATE` target, then insert |
-| `upsert` | v1 | `INSERT ... ON CONFLICT (upsert_key) DO UPDATE` |
-| `fail_if_duplicate` | v1 | `INSERT`, fail on any key conflict |
-| `merge` | *v1.3* | Natural-key match → update, else insert |
-| `version` | *v1.3* | Insert with a new `import_run_id`; never overwrites prior rows |
+| Mode                  | Available in | Behavior                                                         |
+| --------------------- | ------------ | ---------------------------------------------------------------- |
+| `append`            | v1           | `INSERT ... SELECT` from staging                               |
+| `replace`           | v1           | `TRUNCATE` target, then insert                                 |
+| `upsert`            | v1           | `INSERT ... ON CONFLICT (upsert_key) DO UPDATE`                |
+| `fail_if_duplicate` | v1           | `INSERT`, fail on any key conflict                             |
+| `merge`             | *v1.3*     | Natural-key match → update, else insert                         |
+| `version`           | *v1.3*     | Insert with a new `import_run_id`; never overwrites prior rows |
 
 Every loaded row carries an `import_run_id` (FK to `import_runs`). Rejected rows are written to `./data/rejected_rows/<run_id>.parquet` and surfaced in the UI.
 

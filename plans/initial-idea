@@ -1,0 +1,26 @@
+1. Overview
+
+The goal of this project is to build an AI-powered ingestion agent capable of accepting arbitrary structured data files (CSV, Excel, TSV, etc.), analyzing their structure, understanding the semantics of the data, and automatically generating executable import scripts to load the data into a target database.
+The system should combine deterministic analysis tools with AI reasoning to create a reliable, extensible, and semi-autonomous ingestion pipeline.
+
+2. Objectives
+
+The ingestion agent should:
+
+Accept arbitrary tabular data files.
+Analyze and understand file structure and contents.
+Detect schema, relationships, data types, anomalies, and formatting issues.
+Use internal analysis tools to gather metadata and insights.
+Infer an appropriate database schema.
+Generate import/transformation scripts automatically.
+Execute or assist with importing data into a database.
+Support iterative correction, validation, and user feedback.
+
+3. Supported Input Formats
+Initial Scope
+CSV
+XLSX
+XLS
+TSV
+
+the generated script will be saved so that it can be reused and improved on later imports
