@@ -88,13 +88,13 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 - [x] `patterns.py` — regex bank, `pattern_hits` per column
 - [x] `patterns.py` — **date format candidates** with parse success rates
 - [x] `patterns.py` — timezone hints (offsets seen, naive vs aware)
-- [ ] `heuristics.py` — **PK score** (uniqueness + non-null + stable-looking ID)
-- [ ] `heuristics.py` — outlier examples (extreme values; redacted if PII)
-- [ ] `pii.py` — high-confidence detectors: `email`, `phone`, `ip`, `national_id`, `cc_like`
-- [ ] `pii.py` — best-effort detectors: `name_like`, `address_like` (surfaced as warnings, not guarantees)
-- [ ] `pii.py` — **default redaction** for any LLM-bound surface: typed placeholders (`<EMAIL_1>`, `<PHONE_3>`) on sample values **and** top-K values
-- [ ] `pii.py` — raw values written only to local profile artifacts under `./data/profiles/`
-- [ ] `pii.py` — honors `STRUCTAI_ALLOW_RAW_LLM_SAMPLES=true` dev opt-out
+- [x] `heuristics.py` — **PK score** (uniqueness + non-null + stable-looking ID)
+- [~] `heuristics.py` — outlier examples (extreme values; redacted if PII) *(deferred to `profile/columns.py` where the actual data series lives; lands in step 8)*
+- [x] `pii.py` — high-confidence detectors: `email`, `phone`, `ip`, `national_id`, `cc_like`
+- [x] `pii.py` — best-effort detectors: `name_like`, `address_like` (surfaced as warnings, not guarantees)
+- [x] `pii.py` — **default redaction** for any LLM-bound surface: typed placeholders (`<EMAIL_1>`, `<PHONE_3>`) on sample values **and** top-K values
+- [~] `pii.py` — raw values written only to local profile artifacts under `./data/profiles/` *(redact_column is pure; disk-write happens in worker tasks_profile.py, step 11)*
+- [x] `pii.py` — honors `STRUCTAI_ALLOW_RAW_LLM_SAMPLES=true` dev opt-out *(via `allow_raw` parameter; runner threads `Settings.allow_raw_llm_samples` through in step 9)*
 - [ ] **Wide-file truncation policy** (plan §5): file-level stats always; compact column index always; rich stats only for top-N highest-uncertainty columns; omitted columns listed by name with reason; target <30 KB
 
 ### `packages/core/schema/`
@@ -134,8 +134,8 @@ All migrations land in Phase 0 so every later phase writes to a stable schema.
 - [x] `tests/io/test_readers.py` — CSV and TSV `Reader` round-trip; ragged rows raise; embedded newlines in quoted fields preserved
 - [x] `tests/profile/test_types.py` — leading-zero detection; decimal/thousands separator; currency / percent / unit; **type-preservation rule** (ZIPs, SKUs stay `string` even when number-looking)
 - [x] `tests/profile/test_patterns.py` — date format candidates with parse success rates; pattern hits per regex
-- [ ] `tests/profile/test_heuristics.py` — PK score per fixture matches hand-labeled expectation; outlier extraction works without crashing on all-null columns
-- [ ] `tests/profile/test_pii.py` — high-confidence detectors fire for every positive fixture; do NOT fire for negative fixtures; `name_like` / `address_like` flagged as best-effort; redaction replaces sample values **and** top-K with `<EMAIL_N>`-style placeholders; raw values survive in local artifact; `STRUCTAI_ALLOW_RAW_LLM_SAMPLES=true` round-trips raw
+- [~] `tests/profile/test_heuristics.py` — PK score per fixture matches hand-labeled expectation; outlier extraction works without crashing on all-null columns *(PK-score unit tests in place; per-fixture + outlier coverage adds with `profile/columns.py` step 8 and the end-to-end runner step 9)*
+- [x] `tests/profile/test_pii.py` — high-confidence detectors fire for every positive fixture; do NOT fire for negative fixtures; `name_like` / `address_like` flagged as best-effort; redaction replaces sample values **and** top-K with `<EMAIL_N>`-style placeholders; raw values survive in local artifact; `STRUCTAI_ALLOW_RAW_LLM_SAMPLES=true` round-trips raw
 - [x] `tests/schema/test_identifiers.py` — sanitization (trim, NFKC, collapse, lowercase, leading-digit, reserved-word rewrite); collision suffixing; raw→safe mapping persisted on profile
 - [ ] `tests/profile/test_truncation.py` — wide-file policy: file-level + compact column index always included; rich stats only for top-N highest-uncertainty columns; omitted columns listed by name with reason; final profile under the 30 KB budget for a 500-column fixture
 - [ ] `tests/api/test_files.py` — `POST /files` accepts upload, lands in `./data/uploads/quarantine/`, then moves to live area on sniff success; `POST /files` rejects > `STRUCTAI_MAX_UPLOAD_BYTES`; `GET /files` lists; `GET /files/:id/profile` returns persisted profile
