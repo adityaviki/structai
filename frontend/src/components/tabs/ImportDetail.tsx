@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -12,6 +12,7 @@ import {
   MessageCircleQuestion,
   Octagon,
   Quote,
+  RotateCcw,
   Sparkles,
   Undo2,
   XCircle,
@@ -49,9 +50,10 @@ const STEP_TITLES: Record<string, string> = {
 
 export function ImportDetail() {
   const { importId = '' } = useParams()
+  const navigate = useNavigate()
   const [run, setRun] = useState<ImportRunWire | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [actionPending, setActionPending] = useState<'cancel' | 'undo' | null>(null)
+  const [actionPending, setActionPending] = useState<'cancel' | 'undo' | 'restart' | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [confirmUndo, setConfirmUndo] = useState(false)
   const esRef = useRef<EventSource | null>(null)
@@ -131,6 +133,21 @@ export function ImportDetail() {
     }
   }
 
+  const onRestart = async () => {
+    setActionPending('restart')
+    setActionError(null)
+    try {
+      const fresh = await api.restartRun(run.id)
+      navigate(`/projects/${run.project_id}/imports/${fresh.id}`)
+    } catch (err) {
+      setActionError((err as Error).message)
+    } finally {
+      setActionPending(null)
+    }
+  }
+
+  const canRestart = ['cancelled', 'failed', 'reverted'].includes(run.status)
+
   return (
     <div className="space-y-5">
       <div>
@@ -172,6 +189,17 @@ export function ImportDetail() {
               >
                 <Octagon className="h-3.5 w-3.5" />
                 {actionPending === 'cancel' ? 'Stopping…' : 'Stop'}
+              </button>
+            )}
+            {canRestart && (
+              <button
+                className="btn-primary"
+                onClick={() => void onRestart()}
+                disabled={actionPending !== null}
+                title="Start a fresh import on the same document with the same instructions"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                {actionPending === 'restart' ? 'Starting…' : 'Run again'}
               </button>
             )}
             {run.undo_available && (

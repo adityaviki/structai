@@ -1,0 +1,49 @@
+id,order_number,customer_email,order_date,amount,currency,quantity,discount_pct,status,shipping_address,notes,is_gift,gift_message,created_at,weight_kg,tracking_number
+1,ORD-2025-0001,alice@example.com,2025-01-15,$19.99,USD,2,0%,paid,"123 Main St, Springfield, IL 62701","",false,,2025-01-15T10:23:00Z,0.45,1Z999AA10123456784
+2,ORD-2025-0002,Bob.Brown@Example.com,2025-01-16,€25.50,EUR,1,10%,shipped,"45 Rue de la Paix
+75002 Paris, France","Customer asked for ""no plastic"" packaging.",N,,2025-01-16T14:55:00+01:00,1.20,EE123456789FR
+3,ORD-2025-0003,carol@example.com,2025-01-17,$12.00,USD,3,,pending,"500 Long Beach Blvd, Apt 4B
+Long Beach, CA 90802",N/A,Y,Happy birthday!,2025-01-17T09:01:12Z,,
+4,ORD-2025-0004,dan@example.com,2025-01-18,$199.00,USD,1,25%,paid,"742 Evergreen Terrace, Springfield","",false,,2025-01-18T16:42:00Z,3.4,1Z999AA10123456785
+5,ORD-2025-0005,EVE@example.com,2025-01-18,$0.00,USD,1,100%,refunded,"100 Frontier Way, Reno, NV 89501","Promo code abused; refunded.",0,,2025-01-18T19:30:00-07:00,0.10,
+6,ORD-2025-0006,frank@example.com,2025-01-19,£42.50,GBP,5,5%,shipped,"22 Baker St, London, UK",,true,For mum,2025-01-19T11:00:00+00:00,2.50,RR123456785GB
+7,ORD-2025-0007,grace@example.com,2025-01-20,$15.75,USD,2,,pending,"Calle Mayor 17, 28013 Madrid",,Yes,"Con cariño, Grace",2025-01-20T08:14:00+01:00,,
+8,ORD-2025-0008,henry@example.com,2025-01-21,$1200.00,USD,1,,paid,"PO Box 1402, Boulder, CO 80306","High-value item — signature required.",NO,,2025-01-21T22:09:11Z,12.0,1Z999AA10123456786
+9,ORD-2025-0009,ivy@example.com,01/22/2025,$8.25,USD,4,15%,cancelled,"123 Main St, Springfield, IL 62701",cancelled per customer,false,,2025-01-22T03:00:00Z,0.30,
+10,ORD-2025-0010,Jack@example.com,2025-01-22,$77.77,USD,7,7.5%,shipped,"77 Lucky Lane, Las Vegas, NV 89101","",f,,2025-01-22T17:17:17Z,1.77,1Z999AA10123456787
+11,ORD-2025-0011,karen@example.com,2025-01-23,€999.99,EUR,1,0%,paid,"Friedrichstraße 90
+10117 Berlin, Germany","Ship via DHL.",false,,2025-01-23T13:12:00+02:00,8.5,JD0002054128003456
+12,ORD-2025-0012,leo@example.com,2025-01-24,$5.00,USD,1,,paid,"NULL","",,2025-01-24T20:00:00Z,,
+13,ORD-2025-0013,mona@example.com,2025-01-24,$56.40,USD,3,,shipped,"  789 Elm St, Portland, OR 97201  ","leading + trailing whitespace test  ",N,,2025-01-24T22:14:00-08:00,0.95,1Z999AA10123456788
+14,ORD-2025-0014,nick@example.com,2025-01-25,$0.99,USD,1,,paid,"1 Microsoft Way, Redmond, WA 98052","sticker pack",no,,2025-01-25T02:00:00Z,0.05,
+15,ORD-2025-0015,olive@example.com,2025-01-26,¥3200,JPY,2,,shipped,"〒100-0001 東京都千代田区千代田1-1","first JP order!",yes,"心からの感謝を",2025-01-26T10:00:00+09:00,1.10,YT123456789JP
+16,ORD-2025-0016,paul@example.com,2025-01-26,$45.00,USD,1,5%,paid,"Wrong, Address, Should Fail Validation","",false,,2025-01-26T11:11:11Z,1.0,1Z999AA10123456789
+17,ORD-2025-0017,quinn@example.com,2025-01-27,$60.10,USD,2,,paid,"34 Queen St, Auckland 1010, NZ","",FALSE,,2025-01-27T08:30:00+13:00,2.2,NZ12345678
+18,ORD-2025-0018,rachel@example.com,2025-01-28,$99.50,USD,1,,refunded,"410 Terry Ave N, Seattle, WA 98109","Refund processed 2025-01-30",N/A,,2025-01-28T15:00:00-08:00,4.5,1Z999AA10123456790
+19,ORD-2025-0019,sam@example.com,2025-01-29,$15.00,USD,5,,pending,"unknown","item awaiting fulfilment",,2025-01-29T07:22:00Z,,
+20,ORD-2025-0020,tina@example.com,2025-01-30,$320.00,USD,1,12%,shipped,"500 Long Beach Blvd, Apt 4B
+Long Beach, CA 90802","Replacement for ORD-2025-0003",T,,2025-01-30T18:00:00-08:00,5.0,1Z999AA10123456791
+21,ORD-2025-0021,umar@example.com,2025-01-30,$45.50,USD,2,,paid,"Block B, House 22, F-7/3 Islamabad","",N,,2025-01-30T19:00:00+05:00,1.6,PK12345678
+22,ORD-2025-0022,vera@example.com,2025-01-31,$1.23,USD,1,0%,paid,"123 Main St, Springfield, IL 62701","tiny test order",false,,2025-01-31T00:00:01Z,0.01,
+23,ORD-2025-0023,wally@example.com,2025-02-01,$78.40,USD,4,,shipped,"P. Sherman, 42 Wallaby Way, Sydney","gift, please remove price",1,for Nemo,2025-02-01T13:45:00+11:00,2.3,AU123456789
+24,ORD-2025-0024,xavier@example.com,2025-02-01,$22.22,USD,2,11%,paid,"42 Wallaby Way, Sydney","",N,,2025-02-01T13:50:00+11:00,0.80,
+25,ORD-2025-0025,yara@example.com,2025-02-02,$310.00,USD,1,,pending,"123 Main St, Springfield, IL 62701","Customer wants ETA",NO,,2025-02-02T09:09:00Z,7.7,
+26,ORD-2025-0026,zoe@example.com,2025-02-03,$5.50,USD,1,,paid,"  ","whitespace-only address",f,,2025-02-03T10:00:00Z,0.25,
+27,ORD-2025-0027,aaron@example.com,2025-02-03,$15000.00,USD,1,,paid,"1 Hacker Way, Menlo Park, CA 94025","B2B invoice; net 30",FALSE,,2025-02-03T14:00:00-08:00,15.0,1Z999AA10123456792
+28,ORD-2025-0028,beth@example.com,2025-02-04,$8.99,USD,3,,shipped,"77 Bay St, Toronto, ON M5J 2T3","",NO,,2025-02-04T16:00:00-05:00,0.45,CA12345678
+29,ORD-2025-0029,carlos@example.com,2025-02-04,$199.99,USD,1,,paid,"Reforma 222, Cuauhtémoc, CDMX",,N,,2025-02-04T12:00:00-06:00,3.1,MX12345678
+30,ORD-2025-0030,deepa@example.com,2025-02-05,₹2499,INR,1,,shipped,"Plot 14, Sector 18, Noida 201301",,yes,From Mumbai with love,2025-02-05T11:30:00+05:30,1.4,IN12345678
+31,ORD-2025-0031,erik@example.com,2025-02-05,$0.50,USD,1,,paid,"Storgatan 1, 111 51 Stockholm","",N,,2025-02-05T19:00:00+01:00,0.02,
+32,ORD-2025-0032,fatima@example.com,2025-02-06,$66.60,USD,3,,shipped,"PO Box 9, Dubai, UAE","Customer asked: ""ship discreetly""",no,,2025-02-06T22:00:00+04:00,1.9,AE12345678
+33,ORD-2025-0033,gunnar@example.com,2025-02-06,$12.00,USD,1,,cancelled,"Hovedgaden 5, 2670 Greve",,N,,2025-02-06T23:30:00+01:00,,
+34,ORD-2025-0034,hiro@example.com,2025-02-07,¥10000,JPY,1,,paid,"〒530-0001 大阪市北区梅田2-2-22","",NO,,2025-02-07T09:00:00+09:00,2.0,JP12345678
+35,ORD-2025-0035,ines@example.com,2025-02-07,€19.99,EUR,2,,paid,"Av. da Liberdade 250, 1250-149 Lisboa","",f,,2025-02-07T14:14:14+01:00,0.50,PT12345678
+36,ORD-2025-0036,john@example.com,2025-02-08,$0.00,USD,0,100%,refunded,"123 Main St, Springfield, IL 62701","duplicate order — full refund",FALSE,,2025-02-08T08:00:00Z,,
+37,ORD-2025-0037,kira@example.com,2025-02-08,$245.00,USD,1,,paid,"22 King's Cross Rd, London, WC1X 9DR","",no,,2025-02-08T17:45:00+00:00,4.4,GB12345678
+38,ORD-2025-0038,liu@example.com,2025-02-09,¥45,CNY,1,,paid,"Beijing, Chaoyang District","小礼物",1,送给妈妈,2025-02-09T20:00:00+08:00,0.3,CN12345678
+39,ORD-2025-0039,mia@example.com,2025-02-09,$33.30,USD,3,,shipped,"5 Princes St, Edinburgh EH2 2AA","",N,,2025-02-09T11:00:00+00:00,0.90,GB12345679
+40,ORD-2025-0040,noah@example.com,2025-02-10,$1.00,USD,1,,pending,"  9 Bond St, Wellington 6011  ","trailing whitespace; ascii art:
+   ___
+  / _ \\
+ | (_) |
+  \\___/",false,,2025-02-10T05:55:55+13:00,0.05,

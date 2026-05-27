@@ -96,3 +96,11 @@ def test_profile_rejects_unknown_ext(tmp_path: Path) -> None:
     p.write_text("")
     with pytest.raises(ValueError):
         profile_document(p, "parquet")
+
+
+def test_profile_rejects_non_utf8_csv(tmp_path: Path) -> None:
+    p = tmp_path / "ansi.csv"
+    # Real Windows-1252 export: header in ASCII, value cell contains 0xd6 (Ö).
+    p.write_bytes(b"id,name\n1,Bj\xd6rn\n")
+    with pytest.raises(ValueError, match="not UTF-8"):
+        profile_document(p, "csv")

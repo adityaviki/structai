@@ -144,20 +144,32 @@ def _profile_dataframe(name: str, df: pl.DataFrame) -> RegionProfile:
 
 
 def _profile_csv_like(path: Path, *, separator: str, fmt: str) -> DocumentProfile:
-    df = pl.read_csv(
-        path,
-        separator=separator,
-        infer_schema_length=10_000,
-        try_parse_dates=True,
-        ignore_errors=False,
-    )
+    try:
+        df = pl.read_csv(
+            path,
+            separator=separator,
+            infer_schema_length=10_000,
+            try_parse_dates=True,
+            ignore_errors=False,
+        )
+    except pl.exceptions.ComputeError as exc:
+        msg = str(exc).lower()
+        if "utf" in msg or "invalid utf" in msg:
+            raise ValueError(
+                f"{path.name!r} is not UTF-8. If you exported it from Excel, "
+                "re-export as 'CSV UTF-8 (Comma delimited) (*.csv)' — the plain "
+                "'CSV (Comma delimited)' option uses the OS ANSI codepage and "
+                "can't represent non-Latin characters reliably."
+            ) from exc
+        raise
+
     region = _profile_dataframe("default", df)
     return DocumentProfile(
         path=str(path),
         filename=path.name,
         size_bytes=path.stat().st_size,
         format=fmt,
-        encoding="utf-8",
+        encoding="utf8",
         regions=[region],
     )
 

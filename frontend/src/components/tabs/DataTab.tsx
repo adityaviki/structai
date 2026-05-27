@@ -7,8 +7,6 @@ import {
   Database,
   Filter,
   Inbox,
-  KeyRound,
-  Link2,
   Table2,
   X,
 } from 'lucide-react'
@@ -248,21 +246,6 @@ function TableView({ projectId, tableName }: { projectId: string; tableName: str
             ? 'Loading…'
             : `Showing ${rows.length.toLocaleString()} of ${detail.row_count.toLocaleString()}`}
         </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2 border-b border-zinc-800 bg-zinc-900/30 px-3 py-2">
-        {detail.columns.map((c) => (
-          <div
-            key={c.name}
-            className="inline-flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-950/40 px-2 py-1 text-xs"
-          >
-            {c.is_pk && <KeyRound className="h-3 w-3 text-amber-400" />}
-            {c.fk && <Link2 className="h-3 w-3 text-sky-400" />}
-            <span className="font-mono text-zinc-200">{c.name}</span>
-            <span className="text-zinc-500">{c.type}</span>
-            {c.nullable && <span className="text-zinc-600">?</span>}
-          </div>
-        ))}
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto">

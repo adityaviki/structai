@@ -89,6 +89,7 @@ export const api = {
   getRun: (runId: string) => request<ImportRunWire>('GET', `/api/runs/${runId}`),
   cancelRun: (runId: string) => request<{ status: string }>('POST', `/api/runs/${runId}/cancel`),
   undoRun: (runId: string) => request<ImportRunWire>('POST', `/api/runs/${runId}/undo`),
+  restartRun: (runId: string) => request<ImportRunWire>('POST', `/api/runs/${runId}/restart`),
   answerClarification: (
     runId: string,
     clarId: string,

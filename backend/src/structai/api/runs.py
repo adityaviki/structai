@@ -245,6 +245,48 @@ async def run_events(run_id: str, request: Request) -> EventSourceResponse:
     return EventSourceResponse(_event_stream(request, run_id))
 
 
+@router.post("/runs/{run_id}/restart", response_model=ImportRunOut, status_code=201)
+async def restart_run(run_id: str) -> ImportRunOut:
+    """Create a fresh run on the same document with the same instructions.
+
+    Only valid when the original run is in a final state (completed,
+    failed, cancelled, reverted) — we never run two on one document at once.
+    """
+
+    original = await runs_repo.get_run(run_id)
+    if original is None:
+        raise ApiError(status=404, title="Not found", detail=f"Run {run_id!r} not found.")
+    if original["status"] not in {"completed", "failed", "cancelled", "reverted"}:
+        raise ApiError(
+            status=409,
+            title="Run is active",
+            detail=f"Cannot restart a {original['status']} run; stop it first.",
+        )
+
+    new_run_id = new_id()
+    await runs_repo.create_run(
+        run_id=new_run_id,
+        project_id=original["project_id"],
+        document_id=original["document_id"],
+        title=original["title"],
+        instructions=original["instructions"],
+        auto_mode=original["auto_mode"],
+    )
+
+    settings = get_settings()
+    pool = await create_pool(RedisSettings.from_dsn(settings.redis_url))
+    try:
+        await pool.enqueue_job("import_job", new_run_id)
+    finally:
+        await pool.aclose()
+
+    log.info("import.restarted", original=run_id, new=new_run_id)
+    run = await runs_repo.get_run(new_run_id)
+    steps = await runs_repo.list_run_steps(new_run_id)
+    assert run is not None
+    return await _row_to_out(run, steps)
+
+
 @router.post("/runs/{run_id}/undo", status_code=200, response_model=ImportRunOut)
 async def undo_run(run_id: str) -> ImportRunOut:
     run = await runs_repo.get_run(run_id)

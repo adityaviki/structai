@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bot, Check, MessageCircleQuestion, Sparkles, Zap } from 'lucide-react'
+import { Bot, Check, FileUp, MessageCircleQuestion, Sparkles, Zap } from 'lucide-react'
 import { Modal } from './ui/Modal'
 import { FileIcon } from './ui/FileIcon'
 import { StatusBadge } from './ui/StatusBadge'
@@ -27,6 +27,9 @@ export function NewImportModal({
   const [autoMode, setAutoMode] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
 
   const importable = useMemo(
@@ -48,6 +51,32 @@ export function NewImportModal({
     setInstructions('')
     setAutoMode(false)
     setError(null)
+    setUploadError(null)
+  }
+
+  const upload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setUploading(true)
+    setUploadError(null)
+    const fresh = new Set<string>()
+    try {
+      for (const f of Array.from(files)) {
+        const uploaded = await api.uploadDocument(projectId, f)
+        fresh.add(uploaded.id)
+      }
+      reload()
+      // Auto-select the newly uploaded docs so the user can hit Start immediately.
+      setSelected((prev) => {
+        const next = new Set(prev)
+        for (const id of fresh) next.add(id)
+        return next
+      })
+    } catch (err) {
+      setUploadError((err as Error).message)
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
   }
 
   const start = async () => {
@@ -112,6 +141,32 @@ export function NewImportModal({
       }
     >
       <div className="space-y-5">
+        <label
+          className={clsx(
+            'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-6 text-center text-sm transition-colors',
+            uploading
+              ? 'border-brand-500/40 bg-brand-500/5 text-brand-200'
+              : 'border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-brand-500/40 hover:text-brand-300',
+          )}
+        >
+          <FileUp className="h-5 w-5" />
+          <span className="font-medium">
+            {uploading ? 'Uploading…' : 'Drop CSV / TSV / XLSX / JSON files'}
+          </span>
+          <span className="text-xs text-zinc-500">
+            or click to browse — uploaded files are auto-selected for import
+          </span>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,.tsv,.xlsx,.json,text/csv,text/tab-separated-values,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            multiple
+            className="sr-only"
+            onChange={(e) => void upload(e.target.files)}
+          />
+        </label>
+        {uploadError && <p className="text-sm text-rose-400">{uploadError}</p>}
+
         <div>
           <div className="mb-2 flex items-baseline justify-between">
             <h3 className="text-xs font-medium uppercase tracking-wider text-zinc-400">Documents</h3>
