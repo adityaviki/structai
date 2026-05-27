@@ -32,6 +32,26 @@ export interface PipelineStepWire {
   duration_ms: number | null
 }
 
+export interface ClarificationOption {
+  id: string
+  label: string
+  description?: string | null
+}
+
+export interface ClarificationWire {
+  id: string
+  run_id: string
+  question: string
+  context: string | null
+  options: ClarificationOption[]
+  answer_choice_id: string | null
+  answer_custom: string | null
+  auto_decision: boolean
+  auto_reasoning: string | null
+  created_at: string
+  answered_at: string | null
+}
+
 export interface ImportRunWire {
   id: string
   project_id: string
@@ -51,6 +71,7 @@ export interface ImportRunWire {
   reverted_at: string | null
   reverted_by_run_id: string | null
   steps: PipelineStepWire[]
+  clarifications: ClarificationWire[]
 }
 
 export interface ProjectWire {

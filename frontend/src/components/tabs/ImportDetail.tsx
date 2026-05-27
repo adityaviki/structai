@@ -9,14 +9,21 @@ import {
   CircleDashed,
   Hash,
   Loader2,
+  MessageCircleQuestion,
   Octagon,
   Quote,
+  Sparkles,
   Undo2,
   XCircle,
   Zap,
 } from 'lucide-react'
 import clsx from 'clsx'
-import type { ImportRunWire, PipelineStepWire, PipelineStepStatus } from '../../api/types'
+import type {
+  ClarificationWire,
+  ImportRunWire,
+  PipelineStepStatus,
+  PipelineStepWire,
+} from '../../api/types'
 import { api, runEventsUrl } from '../../api/client'
 import { FileIcon } from '../ui/FileIcon'
 import { StatusBadge } from '../ui/StatusBadge'
@@ -228,6 +235,50 @@ export function ImportDetail() {
               <p className="mt-1 whitespace-pre-line text-sm text-zinc-200">{run.instructions}</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {(run.clarifications ?? []).filter((c) => !c.answered_at).map((c) => (
+        <ClarificationCard key={c.id} clarification={c} onAnswered={(updated) => {
+          setRun((prev) => prev ? {
+            ...prev,
+            clarifications: prev.clarifications.map((x) => x.id === updated.id ? updated : x),
+          } : prev)
+        }} />
+      ))}
+
+      {(run.clarifications ?? []).some((c) => c.auto_decision && c.answered_at) && (
+        <div className="card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-brand-400" />
+              <h2 className="text-sm font-medium text-zinc-100">
+                Decisions the agent made on your behalf
+              </h2>
+            </div>
+            <span className="text-xs text-zinc-500">
+              {(run.clarifications ?? []).filter((c) => c.auto_decision).length}
+            </span>
+          </div>
+          <ul className="divide-y divide-zinc-900">
+            {(run.clarifications ?? [])
+              .filter((c) => c.auto_decision && c.answered_at)
+              .map((c) => {
+                const chosen = c.options.find((o) => o.id === c.answer_choice_id)
+                return (
+                  <li key={c.id} className="px-4 py-3">
+                    <p className="text-sm text-zinc-200">{c.question}</p>
+                    <p className="mt-1 text-sm">
+                      <span className="text-zinc-500">Chose:</span>{' '}
+                      <span className="text-brand-200">{chosen?.label ?? c.answer_choice_id}</span>
+                    </p>
+                    {c.auto_reasoning && (
+                      <p className="mt-1 text-xs text-zinc-500 italic">{c.auto_reasoning}</p>
+                    )}
+                  </li>
+                )
+              })}
+          </ul>
         </div>
       )}
 
@@ -476,6 +527,113 @@ function StepCard({ step, index }: { step: PipelineStepWire; index: number }) {
           <CircleDashed className="h-3.5 w-3.5" /> Waiting for previous step to finish
         </div>
       )}
+    </div>
+  )
+}
+
+function ClarificationCard({
+  clarification: c,
+  onAnswered,
+}: {
+  clarification: ClarificationWire
+  onAnswered: (updated: ClarificationWire) => void
+}) {
+  const [choice, setChoice] = useState<string | null>(null)
+  const [custom, setCustom] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async () => {
+    if (!choice && !custom.trim()) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      const updated = await api.answerClarification(c.run_id, c.id, {
+        choice_id: choice === '_custom' ? undefined : choice ?? undefined,
+        custom: custom.trim() || undefined,
+      })
+      onAnswered(updated)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="card border-amber-500/30 bg-amber-500/5 p-4">
+      <div className="flex items-start gap-3">
+        <span className="rounded-full border border-amber-500/30 bg-amber-500/15 p-1.5 text-amber-300">
+          <MessageCircleQuestion className="h-4 w-4" />
+        </span>
+        <div className="flex-1">
+          <p className="text-sm font-medium text-amber-100">{c.question}</p>
+          {c.context && <p className="mt-1 text-xs text-amber-200/70">{c.context}</p>}
+          <div className="mt-3 space-y-2">
+            {c.options.map((o) => (
+              <label
+                key={o.id}
+                className={clsx(
+                  'flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm transition-colors',
+                  choice === o.id
+                    ? 'border-brand-500/60 bg-brand-500/5'
+                    : 'border-zinc-800 hover:border-zinc-700',
+                )}
+              >
+                <input
+                  type="radio"
+                  checked={choice === o.id}
+                  onChange={() => setChoice(o.id)}
+                  className="mt-0.5 accent-brand-500"
+                />
+                <div>
+                  <div className="font-medium text-zinc-100">{o.label}</div>
+                  {o.description && (
+                    <div className="mt-0.5 text-xs text-zinc-400">{o.description}</div>
+                  )}
+                </div>
+              </label>
+            ))}
+            <div
+              className={clsx(
+                'rounded-md border p-3',
+                choice === '_custom' ? 'border-brand-500/60 bg-brand-500/5' : 'border-zinc-800',
+              )}
+            >
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  checked={choice === '_custom'}
+                  onChange={() => setChoice('_custom')}
+                  className="accent-brand-500"
+                />
+                Custom instruction
+              </label>
+              <textarea
+                className="input mt-2"
+                rows={2}
+                placeholder="Tell the agent how you'd like to handle this…"
+                value={custom}
+                onChange={(e) => {
+                  setCustom(e.target.value)
+                  if (e.target.value) setChoice('_custom')
+                }}
+              />
+            </div>
+          </div>
+          {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button
+              className="btn-primary"
+              onClick={() => void submit()}
+              disabled={submitting || (!choice && !custom.trim()) || (choice === '_custom' && !custom.trim())}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {submitting ? 'Sending…' : 'Continue import'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

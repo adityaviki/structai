@@ -18,11 +18,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from collections.abc import Awaitable, Callable  # noqa: TC003 -- used at runtime
 from datetime import UTC, datetime
 from typing import Any
 
 from ..agent import events
-from ..db import runs_repo
+from ..agent.decide import auto_decide
+from ..db import clarifications_repo, runs_repo
+from ..db.ids import new_id
 from ..db.pool import with_database
 from ..db.snapshots import create_snapshot, drop_snapshot, restore_from_snapshot
 from ..logging import log
@@ -109,6 +112,114 @@ async def _check_cancel(run_id: str) -> None:
         raise _CancelledError
 
 
+def _format_answer(question: str, options: list[dict[str, Any]], record: dict[str, Any]) -> str:
+    """Turn a clarification record into a string we feed back as tool_result."""
+
+    picked = record.get("answer_choice_id")
+    custom = record.get("answer_custom")
+    auto = record.get("auto_decision", False)
+    reasoning = record.get("auto_reasoning")
+
+    chosen_label: str | None = None
+    if picked:
+        for o in options:
+            if o.get("id") == picked:
+                chosen_label = o.get("label") or picked
+                break
+
+    parts = []
+    parts.append(f"User's answer to: {question!r}")
+    if picked:
+        parts.append(f"- choice: {picked} ({chosen_label})")
+    if custom:
+        parts.append(f"- custom instruction: {custom}")
+    if auto:
+        parts.append(f"(auto-decided on user's behalf; reasoning: {reasoning})")
+    return "\n".join(parts)
+
+
+def _make_clarification_handler(
+    *,
+    run_id: str,
+    auto_mode: bool,
+    resume_status: str,
+    resume_progress: int,
+) -> Callable[[str, str | None, list[dict[str, Any]]], Awaitable[str]]:
+    async def handler(
+        question: str,
+        context: str | None,
+        options: list[dict[str, Any]],
+    ) -> str:
+        await _check_cancel(run_id)
+        clar_id = new_id()
+        await clarifications_repo.create_clarification(
+            clar_id=clar_id,
+            run_id=run_id,
+            question=question,
+            context=context,
+            options=options,
+        )
+        await events.publish(
+            run_id,
+            {"type": "clarification", "clarification_id": clar_id, "question": question},
+        )
+
+        if auto_mode:
+            try:
+                choice_id, reasoning = await auto_decide(
+                    question=question, context=context, options=options
+                )
+            except Exception as exc:  # noqa: BLE001
+                # If auto-decide fails, fall back to "first option" with a note.
+                choice_id = options[0]["id"] if options else "_unknown"
+                reasoning = f"Auto-decide failed ({exc!s}); defaulted to first option."
+            await clarifications_repo.record_auto_decision(
+                clar_id=clar_id, choice_id=choice_id, reasoning=reasoning
+            )
+            record = {
+                "answer_choice_id": choice_id,
+                "auto_decision": True,
+                "auto_reasoning": reasoning,
+            }
+            await events.publish(
+                run_id,
+                {
+                    "type": "clarification_answered",
+                    "clarification_id": clar_id,
+                    "auto": True,
+                },
+            )
+            return _format_answer(question, options, record)
+
+        # Manual mode: suspend, poll DB until answered or cancelled.
+        await _set_status(run_id, "needs_clarification")
+        while True:
+            await _check_cancel(run_id)
+            if await clarifications_repo.is_answered(clar_id):
+                break
+            await asyncio.sleep(1)
+
+        rec = await clarifications_repo.get_clarification(clar_id)
+        assert rec is not None
+        await _set_status(run_id, resume_status, progress=resume_progress)
+        await events.publish(
+            run_id,
+            {"type": "clarification_answered", "clarification_id": clar_id, "auto": False},
+        )
+        return _format_answer(
+            question,
+            options,
+            {
+                "answer_choice_id": rec["answer_choice_id"],
+                "answer_custom": rec["answer_custom"],
+                "auto_decision": rec["auto_decision"],
+                "auto_reasoning": rec["auto_reasoning"],
+            },
+        )
+
+    return handler
+
+
 async def _cancel_watchdog(run_id: str, cancel_event: asyncio.Event) -> None:
     """Background task: polls the DB and sets the event if cancel is requested.
 
@@ -170,10 +281,18 @@ async def run_import(run_id: str) -> None:
         await _check_cancel(run_id)
         await _set_status(run_id, "generating", progress=25)
         started = _now()
+        auto_mode = bool(record["auto_mode"])
+        gen_clarify = _make_clarification_handler(
+            run_id=run_id,
+            auto_mode=auto_mode,
+            resume_status="generating",
+            resume_progress=25,
+        )
         gen = await generate_import(
             profile=profile,
             existing_tables=[],
             instructions=instructions,
+            on_clarification=gen_clarify,
         )
         await _emit_step(
             run_id,
@@ -264,12 +383,19 @@ async def run_import(run_id: str) -> None:
             attempt += 1
             await _set_status(run_id, "fixing", progress=40 + (attempt - 1) * 10)
             started = _now()
+            fix_clarify = _make_clarification_handler(
+                run_id=run_id,
+                auto_mode=auto_mode,
+                resume_status="fixing",
+                resume_progress=40 + (attempt - 1) * 10,
+            )
             current = await fix_import(
                 profile=profile,
                 previous_script=current.import_script,
                 stderr_tail=err_tail,
                 attempt_number=attempt,
                 instructions=instructions,
+                on_clarification=fix_clarify,
             )
             await _emit_step(
                 run_id,

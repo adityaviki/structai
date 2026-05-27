@@ -22,6 +22,31 @@ PipelineStepKey = Literal["profile", "generate", "execute", "fix", "validate"]
 PipelineStepStatus = Literal["pending", "running", "success", "error", "warning"]
 
 
+class ClarificationOption(BaseModel):
+    id: str
+    label: str
+    description: str | None = None
+
+
+class ClarificationOut(BaseModel):
+    id: str
+    run_id: str
+    question: str
+    context: str | None = None
+    options: list[ClarificationOption]
+    answer_choice_id: str | None = None
+    answer_custom: str | None = None
+    auto_decision: bool = False
+    auto_reasoning: str | None = None
+    created_at: datetime
+    answered_at: datetime | None = None
+
+
+class ClarificationAnswerIn(BaseModel):
+    choice_id: str | None = None
+    custom: str | None = None
+
+
 class ImportRunIn(BaseModel):
     document_id: str
     instructions: str | None = None
@@ -60,3 +85,4 @@ class ImportRunOut(BaseModel):
     reverted_at: datetime | None = None
     reverted_by_run_id: str | None = None
     steps: list[PipelineStepOut] = []
+    clarifications: list[ClarificationOut] = []

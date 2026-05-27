@@ -15,12 +15,19 @@ from fastapi import APIRouter, Request
 from sse_starlette.sse import EventSourceResponse
 
 from ..agent.events import channel, publish
-from ..db import runs_repo
+from ..db import clarifications_repo, runs_repo
 from ..db.ids import new_id
 from ..db.pools import get_pools
 from ..db.snapshots import drop_snapshot, restore_from_snapshot
 from ..logging import log
-from ..schemas.run import ImportRunIn, ImportRunOut, PipelineStepOut
+from ..schemas.run import (
+    ClarificationAnswerIn,
+    ClarificationOption,
+    ClarificationOut,
+    ImportRunIn,
+    ImportRunOut,
+    PipelineStepOut,
+)
 from ..settings import get_settings
 from .errors import ApiError
 
@@ -51,11 +58,32 @@ def _step_record_to_out(row: asyncpg.Record) -> PipelineStepOut:
     )
 
 
-def _row_to_out(row: asyncpg.Record, steps: list[asyncpg.Record]) -> ImportRunOut:
+def _clar_record_to_out(row: asyncpg.Record) -> ClarificationOut:
+    raw_options = row["options"]
+    if isinstance(raw_options, str):
+        raw_options = json.loads(raw_options)
+    options = [ClarificationOption(**o) for o in raw_options]
+    return ClarificationOut(
+        id=row["id"],
+        run_id=row["run_id"],
+        question=row["question"],
+        context=row["context"],
+        options=options,
+        answer_choice_id=row["answer_choice_id"],
+        answer_custom=row["answer_custom"],
+        auto_decision=row["auto_decision"],
+        auto_reasoning=row["auto_reasoning"],
+        created_at=row["created_at"],
+        answered_at=row["answered_at"],
+    )
+
+
+async def _row_to_out(row: asyncpg.Record, steps: list[asyncpg.Record]) -> ImportRunOut:
     undo_available = (
         row["status"] == "completed"
         and row["snapshot_db"] is not None
     )
+    clar_rows = await clarifications_repo.list_for_run(row["id"])
     return ImportRunOut(
         id=row["id"],
         project_id=row["project_id"],
@@ -75,11 +103,8 @@ def _row_to_out(row: asyncpg.Record, steps: list[asyncpg.Record]) -> ImportRunOu
         reverted_at=row["reverted_at"],
         reverted_by_run_id=row["reverted_by_run_id"],
         steps=[_step_record_to_out(s) for s in steps],
+        clarifications=[_clar_record_to_out(c) for c in clar_rows],
     )
-
-
-def _run_record_to_out(row: asyncpg.Record, steps: list[asyncpg.Record]) -> ImportRunOut:
-    return _row_to_out(row, steps)
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +155,7 @@ async def create_import(project_id: str, body: ImportRunIn) -> ImportRunOut:
     run = await runs_repo.get_run(run_id)
     steps = await runs_repo.list_run_steps(run_id)
     assert run is not None
-    return _run_record_to_out(run, steps)
+    return await _row_to_out(run, steps)
 
 
 @router.get("/runs/{run_id}", response_model=ImportRunOut)
@@ -139,7 +164,7 @@ async def get_run(run_id: str) -> ImportRunOut:
     if run is None:
         raise ApiError(status=404, title="Not found", detail=f"Run {run_id!r} not found.")
     steps = await runs_repo.list_run_steps(run_id)
-    return _run_record_to_out(run, steps)
+    return await _row_to_out(run, steps)
 
 
 @router.get("/projects/{project_id}/imports", response_model=list[ImportRunOut])
@@ -154,7 +179,7 @@ async def list_imports(project_id: str) -> list[ImportRunOut]:
     out: list[ImportRunOut] = []
     for row in rows:
         steps = await runs_repo.list_run_steps(row["id"])
-        out.append(_row_to_out(row, steps))
+        out.append(await _row_to_out(row, steps))
     return out
 
 
@@ -170,9 +195,10 @@ async def _event_stream(request: Request, run_id: str) -> AsyncIterator[dict[str
         yield {"event": "error", "data": json.dumps({"detail": "run not found"})}
         return
     steps = await runs_repo.list_run_steps(run_id)
+    snapshot_obj = await _row_to_out(run, steps)
     yield {
         "event": "snapshot",
-        "data": _run_record_to_out(run, steps).model_dump_json(),
+        "data": snapshot_obj.model_dump_json(),
     }
 
     if run["status"] in {"completed", "failed"}:
@@ -294,7 +320,66 @@ async def undo_run(run_id: str) -> ImportRunOut:
     refreshed = await runs_repo.get_run(run_id)
     steps = await runs_repo.list_run_steps(run_id)
     assert refreshed is not None
-    return _row_to_out(refreshed, steps)
+    return await _row_to_out(refreshed, steps)
+
+
+@router.get("/runs/{run_id}/clarifications", response_model=list[ClarificationOut])
+async def list_clarifications(run_id: str) -> list[ClarificationOut]:
+    run = await runs_repo.get_run(run_id)
+    if run is None:
+        raise ApiError(status=404, title="Not found", detail=f"Run {run_id!r} not found.")
+    rows = await clarifications_repo.list_for_run(run_id)
+    return [_clar_record_to_out(r) for r in rows]
+
+
+@router.post(
+    "/runs/{run_id}/clarifications/{clar_id}/answer",
+    response_model=ClarificationOut,
+)
+async def answer_clarification(
+    run_id: str,
+    clar_id: str,
+    body: ClarificationAnswerIn,
+) -> ClarificationOut:
+    if not body.choice_id and not body.custom:
+        raise ApiError(
+            status=400,
+            title="Bad request",
+            detail="Provide at least one of choice_id or custom.",
+        )
+
+    clar = await clarifications_repo.get_clarification(clar_id)
+    if clar is None or clar["run_id"] != run_id:
+        raise ApiError(
+            status=404,
+            title="Not found",
+            detail=f"Clarification {clar_id!r} not found on run {run_id!r}.",
+        )
+    if clar["answered_at"] is not None:
+        raise ApiError(
+            status=409,
+            title="Already answered",
+            detail="This clarification was already answered.",
+        )
+
+    updated = await clarifications_repo.record_user_answer(
+        clar_id=clar_id, choice_id=body.choice_id, custom=body.custom,
+    )
+    if not updated:
+        raise ApiError(
+            status=409,
+            title="Already answered",
+            detail="This clarification was already answered.",
+        )
+
+    await publish(
+        run_id,
+        {"type": "clarification_answered", "clarification_id": clar_id, "auto": False},
+    )
+
+    refreshed = await clarifications_repo.get_clarification(clar_id)
+    assert refreshed is not None
+    return _clar_record_to_out(refreshed)
 
 
 @router.post("/runs/{run_id}/cancel", status_code=202)

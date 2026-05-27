@@ -9,27 +9,24 @@ See [`PLAN.md`](./PLAN.md) for the full design and decision log.
 
 ## Status
 
-**Phase 2 — robustness.** On top of Phase 1, the pipeline now:
+**Phase 3 — clarifications & auto mode.** The agent can now pause and ask
+the user when it has to make a real judgment call (e.g. ambiguous data
+shape, multiple plausible PK candidates). The run goes to status
+``needs_clarification`` and waits for an answer via API or the UI's
+clarification card. With ``auto_mode=true`` on the import, the agent
+instead calls a second small LLM that picks one option on the user's
+behalf and records it as an "auto decision" the user can review.
 
-- Takes a Postgres template-database **snapshot** of the project DB
-  before each execute attempt.
-- Runs a **fix loop** (cap 5 attempts) when the import script fails:
-  the LLM gets the previous script + stderr tail and produces a fixed
-  replacement.
-- Supports **Stop** at any active stage. The subprocess is terminated,
-  the snapshot is dropped, the live DB is unchanged.
-- Supports **Undo** on completed imports. The project DB is restored
-  from the snapshot via an atomic rename swap. Later imports that
-  branched from the now-rewound state are marked reverted.
-- Has a **retention sweeper** (arq cron, hourly) that keeps the 10 most
-  recent snapshots per project and drops older ones.
-- On **worker restart**, any active-state runs that got interrupted are
-  marked failed (or cancelled if cancel was already requested) and their
-  snapshots are dropped.
+Earlier phase capabilities still apply:
 
-Out of scope until later phases: clarifications (Phase 3), XLSX/JSON/TSV
-and multi-table imports (Phase 4), ER diagram (Phase 5), row filters /
-sort and settings UI (Phase 6).
+- **Phase 2:** template-DB snapshots, fix loop (cap 5), stop/cancel,
+  undo, retention sweeper, worker restart recovery.
+- **Phase 1:** profile / generate / execute / validate over a single CSV
+  with live SSE progress, project + document CRUD, paginated data tab.
+
+Out of scope until later phases: XLSX/JSON/TSV and multi-table imports
+(Phase 4), ER diagram (Phase 5), row filters / sort and settings UI
+(Phase 6).
 
 ## Prerequisites
 
@@ -142,6 +139,23 @@ curl -X POST http://127.0.0.1:8000/api/runs/$RUN/undo
 - **Undo:** on a completed import, click **Undo**. The project DB is
   restored to its pre-run state. Any imports that ran after the one you
   undid are also marked `reverted`.
+
+## Exercising Phase 3
+
+- **Clarification (manual):** add an instruction like
+  *"ask me whether 'amount' should be cents or dollars"* and start an
+  import. The status will move to `needs_clarification` and the run
+  detail will show a card with options. Pick one (or write a custom
+  instruction) and **Continue import** — the worker resumes with your
+  answer.
+- **Auto mode:** start an import with **Auto mode** enabled in the
+  New Import modal. If the agent asks anything, the orchestrator
+  synthesizes an answer via a second LLM call and records it under
+  *Decisions the agent made on your behalf*.
+- **API:**
+  - `GET /api/runs/:id/clarifications` — list all clarifications.
+  - `POST /api/runs/:id/clarifications/:cid/answer` body
+    `{"choice_id": "...", "custom": "..."}` — answer manually.
 
 ## Layout
 

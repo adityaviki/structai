@@ -1,4 +1,5 @@
 import type {
+  ClarificationWire,
   DocumentWire,
   ImportRunWire,
   ProjectWire,
@@ -79,6 +80,16 @@ export const api = {
   getRun: (runId: string) => request<ImportRunWire>('GET', `/api/runs/${runId}`),
   cancelRun: (runId: string) => request<{ status: string }>('POST', `/api/runs/${runId}/cancel`),
   undoRun: (runId: string) => request<ImportRunWire>('POST', `/api/runs/${runId}/undo`),
+  answerClarification: (
+    runId: string,
+    clarId: string,
+    body: { choice_id?: string; custom?: string },
+  ) =>
+    request<ClarificationWire>(
+      'POST',
+      `/api/runs/${runId}/clarifications/${clarId}/answer`,
+      body,
+    ),
 
   // Tables
   listTables: (projectId: string) =>

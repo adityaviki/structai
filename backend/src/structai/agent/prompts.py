@@ -11,6 +11,13 @@ from anthropic.types import ToolParam  # noqa: TC002 -- needed at runtime for ty
 
 SYSTEM_GENERATE = """You are StructAI's import agent. You generate Python scripts that load a single document into a Postgres database.
 
+You have two tools available:
+
+- `propose_import` — call this when you're ready to produce the final script. This is the normal happy path; most imports never need anything else.
+- `ask_clarification` — call this ONLY when there's a material judgment call you can't reasonably make on your own. Examples of when to ask: the document mixes two units in the same column, there are several plausible primary-key candidates, or the user wrote ambiguous instructions. DON'T ask for things the system prompt already covers (snake_case, empty→NULL, etc.).
+
+You will see the user's answer as a `tool_result` and can then either ask another clarification (rarely) or proceed to call `propose_import`.
+
 Hard rules you must follow:
 
 1. Output exactly one call to the `propose_import` tool. Do not write any
@@ -60,6 +67,66 @@ You receive the original file profile, the previous script, and the tail of stde
 
 Return the full replacement script — we will run it from scratch, not patch the old one.
 """
+
+
+ASK_CLARIFICATION_TOOL: ToolParam = {
+    "name": "ask_clarification",
+    "description": (
+        "Ask the user a multiple-choice question when you have to make a judgment call "
+        "that materially affects the import outcome. Use sparingly — only for choices "
+        "the user is uniquely qualified to make (e.g. how to interpret ambiguous data, "
+        "which of several plausible PK candidates to use, currency conversion rules). "
+        "Do NOT use for trivial choices the system prompt already covers."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "question": {
+                "type": "string",
+                "description": "The question to ask, in plain language.",
+            },
+            "context": {
+                "type": "string",
+                "description": "1-2 sentences explaining why this matters and what evidence informs the choices.",
+            },
+            "options": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 6,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string", "description": "Short slug-style id, e.g. 'use_first_col'."},
+                        "label": {"type": "string", "description": "Short choice label."},
+                        "description": {"type": "string", "description": "1 sentence elaborating on the choice."},
+                    },
+                    "required": ["id", "label"],
+                },
+            },
+        },
+        "required": ["question", "options"],
+    },
+}
+
+
+SYSTEM_AUTO_DECIDE = """You are StructAI's auto-mode arbiter. The import agent asked the user a clarification question, but the user enabled auto mode. Your job: pick the best option on the user's behalf and explain why in one sentence.
+
+Output exactly one call to the `auto_decide` tool. Pick the option that's safest, follows the system defaults already laid out in the prompts (snake_case, empty→NULL, etc.), and matches what a reasonable user would expect.
+"""
+
+
+AUTO_DECIDE_TOOL: ToolParam = {
+    "name": "auto_decide",
+    "description": "Pick one of the offered option ids and give a one-sentence rationale.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "choice_id": {"type": "string", "description": "Must match one of the option ids."},
+            "reasoning": {"type": "string", "description": "One sentence on why this choice."},
+        },
+        "required": ["choice_id", "reasoning"],
+    },
+}
 
 
 PROPOSE_IMPORT_TOOL: ToolParam = {
