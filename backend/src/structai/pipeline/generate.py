@@ -18,7 +18,7 @@ from ..agent.prompts import (
     SYSTEM_GENERATE,
     render_generate_user_message,
 )
-from .profile import FileProfile  # noqa: TC001 -- used at runtime in signature
+from .profile import DocumentProfile  # noqa: TC001 -- used at runtime in signature
 
 ClarificationHandler = Callable[[str, str | None, list[dict[str, Any]]], Awaitable[str]]
 
@@ -33,7 +33,7 @@ class GenerateResult:
 
 async def generate_import(
     *,
-    profile: FileProfile,
+    profile: DocumentProfile,
     existing_tables: list[str],
     instructions: str | None,
     on_clarification: ClarificationHandler | None = None,

@@ -20,14 +20,14 @@ from ..agent.prompts import (
 from .generate import GenerateResult
 
 if TYPE_CHECKING:
-    from .profile import FileProfile
+    from .profile import DocumentProfile
 
 ClarificationHandler = Callable[[str, str | None, list[dict[str, Any]]], Awaitable[str]]
 
 
 async def fix_import(
     *,
-    profile: FileProfile,
+    profile: DocumentProfile,
     previous_script: str,
     stderr_tail: str,
     attempt_number: int,

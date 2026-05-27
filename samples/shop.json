@@ -1,0 +1,13 @@
+{
+  "customers": [
+    {"id": 1, "name": "Alice Anderson", "email": "alice@example.com", "joined_at": "2024-01-15"},
+    {"id": 2, "name": "Bob Brown", "email": "bob@example.com", "joined_at": "2024-02-03"},
+    {"id": 3, "name": "Carol Chen", "email": "carol@example.com", "joined_at": "2024-02-19"}
+  ],
+  "orders": [
+    {"id": 1001, "customer_id": 1, "total": 49.99, "ordered_at": "2024-03-10T11:22:00Z"},
+    {"id": 1002, "customer_id": 2, "total": 12.50, "ordered_at": "2024-03-11T09:00:00Z"},
+    {"id": 1003, "customer_id": 1, "total": 8.75,  "ordered_at": "2024-03-12T18:42:00Z"},
+    {"id": 1004, "customer_id": 3, "total": 199.0, "ordered_at": "2024-03-15T14:30:00Z"}
+  ]
+}

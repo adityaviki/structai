@@ -51,7 +51,7 @@ export function DocumentsTab({
           <div>
             <h2 className="text-sm font-medium text-zinc-100">Documents</h2>
             <p className="text-xs text-zinc-500">
-              Files uploaded to this project. Phase 1 supports CSV; more formats in Phase 4.
+              Files uploaded to this project. CSV, TSV, XLSX, JSON.
             </p>
           </div>
           <button onClick={onNewImport} className="btn-primary">
@@ -64,13 +64,13 @@ export function DocumentsTab({
       <label className="card flex cursor-pointer flex-col items-center justify-center gap-2 border-dashed py-10 text-center text-sm text-zinc-400 hover:border-brand-500/40 hover:text-brand-300">
         <FileUp className="h-6 w-6" />
         <span className="font-medium">
-          {uploading ? 'Uploading…' : 'Drop CSV files here'}
+          {uploading ? 'Uploading…' : 'Drop CSV / TSV / XLSX / JSON files here'}
         </span>
         <span className="text-xs text-zinc-500">or click to browse — multiple files supported</span>
         <input
           ref={inputRef}
           type="file"
-          accept=".csv,text/csv"
+          accept=".csv,.tsv,.xlsx,.json,text/csv,text/tab-separated-values,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           multiple
           className="sr-only"
           onChange={(e) => void upload(e.target.files)}

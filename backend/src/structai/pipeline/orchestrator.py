@@ -34,7 +34,7 @@ from ..workspace.storage import run_dir, workspace_root
 from .execute import ExecuteResult, execute_script
 from .fix import fix_import
 from .generate import generate_import
-from .profile import profile_document
+from .profile import DocumentProfile, profile_document
 from .validate import validate_project
 
 MAX_FIX_ATTEMPTS = 5
@@ -42,6 +42,18 @@ MAX_FIX_ATTEMPTS = 5
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _profile_summary(profile: DocumentProfile) -> str:
+    if not profile.regions:
+        return "No regions detected."
+    if len(profile.regions) == 1:
+        r = profile.regions[0]
+        return f"{r.row_count} rows · {len(r.columns)} columns"
+    parts = [f"{len(profile.regions)} regions"]
+    for r in profile.regions:
+        parts.append(f"  - `{r.name}`: {r.row_count} rows · {len(r.columns)} columns")
+    return "\n".join(parts)
 
 
 def _snapshot_name(project_db: str, run_id: str) -> str:
@@ -272,7 +284,7 @@ async def run_import(run_id: str) -> None:
             step_key="profile",
             status="success",
             title="Profile document",
-            summary=f"{profile.total_rows} rows · {len(profile.columns)} columns",
+            summary=_profile_summary(profile),
             started_at=started,
             duration_ms=int((_now() - started).total_seconds() * 1000),
         )

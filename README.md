@@ -9,24 +9,24 @@ See [`PLAN.md`](./PLAN.md) for the full design and decision log.
 
 ## Status
 
-**Phase 3 — clarifications & auto mode.** The agent can now pause and ask
-the user when it has to make a real judgment call (e.g. ambiguous data
-shape, multiple plausible PK candidates). The run goes to status
-``needs_clarification`` and waits for an answer via API or the UI's
-clarification card. With ``auto_mode=true`` on the import, the agent
-instead calls a second small LLM that picks one option on the user's
-behalf and records it as an "auto decision" the user can review.
+**Phase 4 — multi-format + multi-table.** Uploads now accept CSV, TSV,
+XLSX, and JSON. The profiler returns a list of *regions* (CSV/TSV: one;
+XLSX: one per sheet; JSON: one per array, automatically detecting
+array-of-objects / object-of-arrays / NDJSON shapes). The agent prompt
+encourages one Postgres table per region and inferring foreign keys
+where the data clearly suggests them (e.g. ``orders.customer_id`` →
+``customers.id``).
 
 Earlier phase capabilities still apply:
 
+- **Phase 3:** clarifications + auto mode (agent can pause or auto-decide).
 - **Phase 2:** template-DB snapshots, fix loop (cap 5), stop/cancel,
   undo, retention sweeper, worker restart recovery.
-- **Phase 1:** profile / generate / execute / validate over a single CSV
-  with live SSE progress, project + document CRUD, paginated data tab.
+- **Phase 1:** profile / generate / execute / validate, live SSE
+  progress, paginated data tab.
 
-Out of scope until later phases: XLSX/JSON/TSV and multi-table imports
-(Phase 4), ER diagram (Phase 5), row filters / sort and settings UI
-(Phase 6).
+Out of scope until later phases: ER diagram (Phase 5), row filters /
+sort and settings UI (Phase 6).
 
 ## Prerequisites
 
@@ -156,6 +156,18 @@ curl -X POST http://127.0.0.1:8000/api/runs/$RUN/undo
   - `GET /api/runs/:id/clarifications` — list all clarifications.
   - `POST /api/runs/:id/clarifications/:cid/answer` body
     `{"choice_id": "...", "custom": "..."}` — answer manually.
+
+## Exercising Phase 4
+
+- **TSV:** upload `samples/people.tsv` and run an import. Same flow as
+  CSV; the agent reads with `polars.read_csv(separator='\t')`.
+- **JSON (one table):** an array-of-objects file is treated as a single
+  table.
+- **JSON (multi-table with FK):** upload `samples/shop.json`. The
+  top-level keys `customers` and `orders` become two tables with a
+  foreign key on `orders.customer_id`.
+- **XLSX (multi-sheet with FK):** upload `samples/shop.xlsx` — same
+  data as the JSON sample, one sheet per table.
 
 ## Layout
 

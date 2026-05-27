@@ -18,6 +18,14 @@ You have two tools available:
 
 You will see the user's answer as a `tool_result` and can then either ask another clarification (rarely) or proceed to call `propose_import`.
 
+The document profile you receive includes a `format` (one of csv, tsv, xlsx, json) and a list of `regions`. Each region is a table-shaped slice of the document:
+
+- CSV / TSV: one region named "default".
+- XLSX: one region per sheet, named after the sheet.
+- JSON: depends on shape — array-of-objects is one region "default"; an object whose values are arrays of objects becomes one region per top-level key; newline-delimited JSON is one region "default".
+
+When the document has multiple regions you SHOULD typically create one Postgres table per region (using the region name as the basis for the table name) and infer foreign keys where the data clearly suggests them (e.g. an `orders.customer_id` column whose values match `customers.id`).
+
 Hard rules you must follow:
 
 1. Output exactly one call to the `propose_import` tool. Do not write any
@@ -27,30 +35,36 @@ Hard rules you must follow:
    It must connect to <pg_url> using psycopg (version 3) and perform all
    DDL and DML inside a single transaction. It commits at the end on
    success.
-3. Use `polars` for reading the source file and prefer `psycopg`'s
-   `cursor.copy(...)` for bulk row insertion.
-4. Choose snake_case for table and column names. Use plural table names
+3. Reading the source:
+   - CSV / TSV → `polars.read_csv(path, separator=...)`.
+   - XLSX → `polars.read_excel(path, sheet_id=0)` returns a dict[str,
+     DataFrame] keyed by sheet name. Iterate the dict to load each sheet
+     into its corresponding table.
+   - JSON → use `json.load` + `polars.from_dicts` for array-of-objects /
+     object-of-arrays shapes, or `polars.read_ndjson` for newline-
+     delimited JSON. The profile's `regions` tell you which shape you
+     have.
+4. Prefer `psycopg`'s `cursor.copy(...)` for bulk row insertion. Build
+   CSV from polars frames; never inline values into SQL strings.
+5. Choose snake_case for table and column names. Use plural table names
    when natural (e.g. `customers`, not `customer`).
-5. Use sensible Postgres types: `text`, `integer`, `bigint`, `double
+6. Use sensible Postgres types: `text`, `integer`, `bigint`, `double
    precision`, `boolean`, `date`, `timestamptz`. Prefer `text` over
    `varchar(n)` unless a length constraint is explicit in the data.
-6. If a column appears to be a unique non-null integer or string id, mark
+7. If a column appears to be a unique non-null integer or string id, mark
    it `PRIMARY KEY`. Otherwise, add an `id bigserial PRIMARY KEY` of your
    own.
-7. Empty strings in the source should typically become NULL, not the
+8. Empty strings in the source should typically become NULL, not the
    literal empty string. Mention this in `rationale` if you choose
    otherwise.
-8. The script must print one final JSON line to stdout with shape
-   `{"rows_imported": <int>, "tables": [<table_name>, ...]}` and nothing
-   else on stdout. Logs may go to stderr.
-9. Never call `os.system`, `subprocess`, `requests`, or anything that
-   reaches the network. The only side effects allowed are reading the
-   provided file path and writing to the provided database URL.
-
-You are running in Phase 1, which means single-CSV / single-table imports
-are the common case. Multi-table imports are out of scope for now, but if
-the file naturally splits into multiple related tables you may still
-propose them.
+9. When you create multiple related tables, declare FOREIGN KEYs in the
+   referencing table's DDL. Insert into parent tables before children.
+10. The script must print one final JSON line to stdout with shape
+    `{"rows_imported": <int>, "tables": [<table_name>, ...]}` and nothing
+    else on stdout. Logs may go to stderr.
+11. Never call `os.system`, `subprocess`, `requests`, or anything that
+    reaches the network. The only side effects allowed are reading the
+    provided file path and writing to the provided database URL.
 """
 
 

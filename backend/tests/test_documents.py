@@ -35,13 +35,28 @@ async def test_upload_csv_and_list(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_upload_rejects_non_csv(client: AsyncClient) -> None:
+async def test_upload_rejects_unknown_format(client: AsyncClient) -> None:
     pid = await _create_project(client)
     r = await client.post(
         f"/api/projects/{pid}/documents",
-        files={"file": ("data.xlsx", io.BytesIO(b"PK"), "application/octet-stream")},
+        files={"file": ("data.parquet", io.BytesIO(b"\x00"), "application/octet-stream")},
     )
     assert r.status_code == 415
+
+
+@pytest.mark.asyncio
+async def test_upload_accepts_tsv_xlsx_json(client: AsyncClient) -> None:
+    pid = await _create_project(client)
+    for name, body in [
+        ("a.tsv", b"id\tn\n1\tx\n"),
+        ("a.xlsx", b"PK\x03\x04"),
+        ("a.json", b'[{"id":1}]'),
+    ]:
+        r = await client.post(
+            f"/api/projects/{pid}/documents",
+            files={"file": (name, io.BytesIO(body), "application/octet-stream")},
+        )
+        assert r.status_code == 201, f"{name}: {r.text}"
 
 
 @pytest.mark.asyncio

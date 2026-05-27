@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 router = APIRouter(prefix="/api/projects/{project_id}/documents", tags=["documents"])
 
-ALLOWED_EXTS = {"csv"}  # Phase 1 only. Phase 4 adds tsv/xlsx/json.
+ALLOWED_EXTS = {"csv", "tsv", "xlsx", "json"}
 
 
 def _row_to_doc(row: asyncpg.Record) -> DocumentOut:
@@ -55,7 +55,7 @@ async def upload_document(project_id: str, file: UploadFile) -> DocumentOut:
         raise ApiError(
             status=415,
             title="Unsupported file type",
-            detail=f"Phase 1 only supports CSV (got .{ext!r}).",
+            detail=f"Supported formats: {', '.join(sorted(ALLOWED_EXTS))} (got .{ext!r}).",
         )
 
     doc_id = new_id()
