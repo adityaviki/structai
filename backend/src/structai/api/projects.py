@@ -15,6 +15,7 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 
 def _row_to_project(row: asyncpg.Record) -> ProjectOut:
+    keys = set(row.keys())
     return ProjectOut(
         id=row["id"],
         name=row["name"],
@@ -22,6 +23,7 @@ def _row_to_project(row: asyncpg.Record) -> ProjectOut:
         emoji=row["emoji"],
         color=row["color"],
         db_name=row["db_name"],
+        model_override=row["model_override"] if "model_override" in keys else None,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -62,7 +64,8 @@ async def create_project(body: ProjectIn) -> ProjectOut:
                 """
                 INSERT INTO projects (id, name, description, emoji, color, db_name)
                 VALUES ($1, $2, $3, $4, $5, $6)
-                RETURNING id, name, description, emoji, color, db_name, created_at, updated_at
+                RETURNING id, name, description, emoji, color, db_name,
+                          model_override, created_at, updated_at
                 """,
                 project_id,
                 body.name,
@@ -139,3 +142,77 @@ async def get_project(project_id: str) -> ProjectOut:
     if row is None:
         raise ApiError(status=404, title="Not found", detail=f"Project {project_id!r} not found.")
     return _row_to_project(row)
+
+
+@router.delete("/{project_id}", status_code=204)
+async def delete_project(project_id: str) -> None:
+    """Drop all DBs (project + snapshots), workspace files, and meta rows."""
+
+    import shutil
+
+    from ..db.snapshots import drop_snapshot
+    from ..workspace.storage import document_dir, run_dir
+
+    pools = get_pools()
+    meta = await pools.meta()
+    async with meta.acquire() as conn:
+        proj = await conn.fetchrow("SELECT * FROM projects WHERE id = $1", project_id)
+        if proj is None:
+            raise ApiError(
+                status=404, title="Not found", detail=f"Project {project_id!r} not found."
+            )
+        snapshot_rows = await conn.fetch(
+            "SELECT id, snapshot_db FROM import_runs "
+            "WHERE project_id = $1 AND snapshot_db IS NOT NULL",
+            project_id,
+        )
+        document_ids = [
+            r["id"]
+            for r in await conn.fetch(
+                "SELECT id FROM documents WHERE project_id = $1", project_id
+            )
+        ]
+        run_ids = [
+            r["id"]
+            for r in await conn.fetch(
+                "SELECT id FROM import_runs WHERE project_id = $1", project_id
+            )
+        ]
+
+    settings = get_settings()
+
+    # 1. Drop snapshot DBs.
+    for s in snapshot_rows:
+        try:
+            await drop_snapshot(settings=settings, snapshot_db=s["snapshot_db"])
+        except Exception:  # noqa: BLE001
+            log.exception("project.delete.snapshot_drop_failed", snapshot_db=s["snapshot_db"])
+
+    # 2. Drop the project DB itself.
+    await pools.drop_project_pool(proj["db_name"])
+    admin = await connect_admin(settings)
+    try:
+        await admin.execute(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+            "WHERE datname = $1 AND pid <> pg_backend_pid()",
+            proj["db_name"],
+        )
+        await admin.execute(f'DROP DATABASE IF EXISTS "{proj["db_name"]}"')
+    finally:
+        await admin.close()
+
+    # 3. Delete the meta rows (CASCADE handles documents/runs/clarifications).
+    async with meta.acquire() as conn:
+        await conn.execute("DELETE FROM projects WHERE id = $1", project_id)
+
+    # 4. Remove workspace files for the project's documents and runs.
+    for did in document_ids:
+        d = document_dir(did)
+        if d.exists():
+            shutil.rmtree(d, ignore_errors=True)
+    for rid in run_ids:
+        rd = run_dir(rid)
+        if rd.exists():
+            shutil.rmtree(rd, ignore_errors=True)
+
+    log.info("project.deleted", id=project_id, db_name=proj["db_name"])

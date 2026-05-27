@@ -1,6 +1,15 @@
-import { ChevronRight, Database, FileSpreadsheet, GitBranch, Plus, Upload } from 'lucide-react'
+import {
+  ChevronRight,
+  Database,
+  FileSpreadsheet,
+  GitBranch,
+  Plus,
+  Settings as SettingsIcon,
+  Trash2,
+  Upload,
+} from 'lucide-react'
 import { useState } from 'react'
-import { NavLink, Navigate, Route, Routes, useParams } from 'react-router-dom'
+import { NavLink, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import clsx from 'clsx'
 import { Logo } from '../components/ui/Logo'
 import { DataTab } from '../components/tabs/DataTab'
@@ -8,25 +17,45 @@ import { ImportsTab } from '../components/tabs/ImportsTab'
 import { ImportDetail } from '../components/tabs/ImportDetail'
 import { SchemaTab } from '../components/tabs/SchemaTab'
 import { DocumentsTab } from '../components/tabs/DocumentsTab'
+import { ProjectSettingsTab } from '../components/tabs/ProjectSettingsTab'
 import { NewImportModal } from '../components/NewImportModal'
+import { Modal } from '../components/ui/Modal'
 import { api } from '../api/client'
 import { useAsync } from '../api/hooks'
 
 export function ProjectPage() {
   const { projectId = '' } = useParams()
+  const navigate = useNavigate()
   const [showNewImport, setShowNewImport] = useState(false)
   const [importsRefresh, setImportsRefresh] = useState(0)
+  const [showDelete, setShowDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const { data: project, loading, error } = useAsync(() => api.getProject(projectId), [projectId])
 
   if (loading) return <p className="p-10 text-sm text-zinc-500">Loading project…</p>
   if (error || !project) return <Navigate to="/" replace />
 
+  const onDelete = async () => {
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await api.deleteProject(projectId)
+      navigate('/', { replace: true })
+    } catch (err) {
+      setDeleteError((err as Error).message)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const tabs = [
     { to: 'imports', label: 'Imports', icon: FileSpreadsheet },
     { to: 'data', label: 'Data', icon: Database },
     { to: 'schema', label: 'Schema', icon: GitBranch },
     { to: 'documents', label: 'Documents', icon: Upload },
+    { to: 'settings', label: 'Settings', icon: SettingsIcon },
   ]
 
   const onImportStarted = () => setImportsRefresh((n) => n + 1)
@@ -44,6 +73,13 @@ export function ProjectPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowDelete(true)}
+              className="btn-ghost text-rose-300/80 hover:bg-rose-500/10 hover:text-rose-200"
+              title="Delete project"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
             <button onClick={() => setShowNewImport(true)} className="btn-primary">
               <Plus className="h-4 w-4" />
               New import
@@ -86,6 +122,10 @@ export function ProjectPage() {
             path="documents"
             element={<DocumentsTab projectId={projectId} onNewImport={() => setShowNewImport(true)} />}
           />
+          <Route
+            path="settings"
+            element={<ProjectSettingsTab project={project} />}
+          />
           <Route path="*" element={<Navigate to="imports" replace />} />
         </Routes>
       </main>
@@ -96,6 +136,29 @@ export function ProjectPage() {
         projectId={projectId}
         onStarted={onImportStarted}
       />
+
+      <Modal
+        open={showDelete}
+        onClose={() => setShowDelete(false)}
+        title="Delete project"
+        description="This drops the project's Postgres database, every snapshot, and all uploaded files. It cannot be undone."
+        footer={
+          <>
+            <button className="btn-ghost" onClick={() => setShowDelete(false)} disabled={deleting}>
+              Cancel
+            </button>
+            <button
+              className="btn-primary !bg-rose-500 hover:!bg-rose-400"
+              onClick={() => void onDelete()}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting…' : `Delete ${project.name}`}
+            </button>
+          </>
+        }
+      >
+        {deleteError && <p className="text-sm text-rose-400">{deleteError}</p>}
+      </Modal>
     </div>
   )
 }

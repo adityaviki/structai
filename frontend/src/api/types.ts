@@ -81,6 +81,7 @@ export interface ProjectWire {
   emoji: string | null
   color: string | null
   db_name: string
+  model_override: string | null
   created_at: string
   updated_at: string
 }
@@ -132,6 +133,31 @@ export interface LayoutPosition {
 
 export interface ProjectLayout {
   positions: LayoutPosition[]
+}
+
+export interface SettingsWire {
+  anthropic_key_present: boolean
+  anthropic_key_source: 'env' | 'config' | 'unset'
+  default_model: string
+  default_model_source: 'env' | 'config' | 'default'
+  snapshot_keep_last_n: number
+  snapshot_max_age_days: number
+}
+
+export interface SettingsPatch {
+  anthropic_api_key?: string
+  default_model?: string
+  snapshot_keep_last_n?: number
+  snapshot_max_age_days?: number
+  clear_anthropic_api_key?: boolean
+}
+
+export interface SnapshotWire {
+  run_id: string
+  snapshot_db: string
+  finished_at: string | null
+  pinned: boolean
+  size_bytes: number
 }
 
 export interface FkRef {

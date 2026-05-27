@@ -10,13 +10,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..db import settings_repo
 from ..db.pools import get_pools
 from ..db.snapshots import drop_snapshot
 from ..logging import log
 from ..settings import get_settings
-
-KEEP_LAST_N = 10
-
 
 ACTIVE_STATUSES = (
     "profiling",
@@ -33,9 +31,11 @@ async def sweep_snapshots(_ctx: dict[str, Any]) -> int:
     """Drop snapshots beyond the retention window. Returns count dropped."""
 
     settings = get_settings()
+    keep_last_n, max_age_days = await settings_repo.effective_retention()
     meta = await get_pools().meta()
     dropped = 0
     async with meta.acquire() as conn:
+        # Drop by retention count.
         rows = await conn.fetch(
             """
             WITH ranked AS (
@@ -51,7 +51,7 @@ async def sweep_snapshots(_ctx: dict[str, Any]) -> int:
             )
             SELECT id, snapshot_db FROM ranked WHERE rk > $1
             """,
-            KEEP_LAST_N,
+            keep_last_n,
         )
         for r in rows:
             try:
@@ -63,6 +63,30 @@ async def sweep_snapshots(_ctx: dict[str, Any]) -> int:
                 "UPDATE import_runs SET snapshot_db = NULL WHERE id = $1", r["id"]
             )
             dropped += 1
+
+        # Drop by max age (only if positive).
+        if max_age_days > 0:
+            old_rows = await conn.fetch(
+                """
+                SELECT id, snapshot_db
+                FROM import_runs
+                WHERE snapshot_db IS NOT NULL
+                  AND snapshot_pinned = false
+                  AND status = 'completed'
+                  AND finished_at < now() - ($1::int * interval '1 day')
+                """,
+                max_age_days,
+            )
+            for r in old_rows:
+                try:
+                    await drop_snapshot(settings=settings, snapshot_db=r["snapshot_db"])
+                except Exception:  # noqa: BLE001
+                    log.exception("sweeper.age_drop_failed", snapshot_db=r["snapshot_db"])
+                    continue
+                await conn.execute(
+                    "UPDATE import_runs SET snapshot_db = NULL WHERE id = $1", r["id"]
+                )
+                dropped += 1
     if dropped:
         log.info("sweeper.done", dropped=dropped)
     return dropped

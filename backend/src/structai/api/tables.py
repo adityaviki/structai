@@ -144,42 +144,161 @@ def _decode_cursor(cursor: str) -> Any:
     return json.loads(raw)["v"]
 
 
+_FILTER_OPS = {
+    "eq": "=",
+    "neq": "<>",
+    "gt": ">",
+    "gte": ">=",
+    "lt": "<",
+    "lte": "<=",
+    "contains": "ILIKE",
+}
+
+
+_INT_TYPES = {"integer", "bigint", "smallint"}
+_FLOAT_TYPES = {"double precision", "real", "numeric"}
+
+
+def _coerce_value(raw_value: str, col_type: str) -> Any:
+    t = col_type.lower()
+    if t in _INT_TYPES:
+        try:
+            return int(raw_value)
+        except ValueError as exc:
+            raise ApiError(
+                status=400, title="Bad filter", detail=f"Expected integer, got {raw_value!r}."
+            ) from exc
+    if t in _FLOAT_TYPES:
+        try:
+            return float(raw_value)
+        except ValueError as exc:
+            raise ApiError(
+                status=400, title="Bad filter", detail=f"Expected number, got {raw_value!r}."
+            ) from exc
+    if t == "boolean":
+        if raw_value.lower() in {"true", "t", "1"}:
+            return True
+        if raw_value.lower() in {"false", "f", "0"}:
+            return False
+        raise ApiError(
+            status=400, title="Bad filter", detail=f"Expected boolean, got {raw_value!r}."
+        )
+    # date / timestamp / timestamptz / text / uuid: pass through as string;
+    # Postgres will parse ISO-8601 timestamps natively when bound to those
+    # column types.
+    return raw_value
+
+
+def _parse_filters(
+    raw: list[str],
+    columns_by_name: dict[str, ColumnOut],
+) -> list[tuple[str, str, Any]]:
+    """Each `filter` query value is `col:op:value`. Coerces the value to the
+    column's type so asyncpg can bind it directly.
+    """
+
+    out: list[tuple[str, str, Any]] = []
+    for s in raw:
+        parts = s.split(":", 2)
+        if len(parts) != 3:
+            raise ApiError(
+                status=400, title="Bad filter", detail=f"Expected `col:op:value`, got {s!r}."
+            )
+        col, op, raw_value = parts
+        if col not in columns_by_name:
+            raise ApiError(status=400, title="Bad filter", detail=f"Unknown column {col!r}.")
+        if op not in _FILTER_OPS:
+            raise ApiError(
+                status=400,
+                title="Bad filter",
+                detail=f"Unknown op {op!r}. Allowed: {', '.join(sorted(_FILTER_OPS))}.",
+            )
+        if op == "contains":
+            out.append((col, op, raw_value))
+        else:
+            out.append((col, op, _coerce_value(raw_value, columns_by_name[col].type)))
+    return out
+
+
 @router.get("/tables/{table_name}/rows", response_model=RowsPage)
 async def get_rows(
     project_id: str,
     table_name: str,
     cursor: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
+    sort: str | None = Query(default=None),
+    dir: str = Query(default="asc"),
+    filter: list[str] = Query(default=[]),  # noqa: A002, B008 -- FastAPI query arg
 ) -> RowsPage:
     detail = await get_table(project_id, table_name)
     pk_columns = [c.name for c in detail.columns if c.is_pk]
+    col_names = [c.name for c in detail.columns]
+    known = set(col_names)
+
+    if sort is not None and sort not in known:
+        raise ApiError(status=400, title="Bad sort", detail=f"Unknown column {sort!r}.")
+    direction = dir.lower()
+    if direction not in {"asc", "desc"}:
+        raise ApiError(status=400, title="Bad sort", detail="`dir` must be asc or desc.")
+
+    cols_by_name = {c.name: c for c in detail.columns}
+    filters = _parse_filters(filter, cols_by_name)
 
     db_name = await _resolve_project_db(project_id)
     pool = await get_pools().project(db_name)
-
-    col_names = [c.name for c in detail.columns]
     select_cols = ", ".join(f'"{c}"' for c in col_names)
 
+    # Build WHERE clause from filters.
+    args: list[Any] = []
+    where_parts: list[str] = []
+    for col, op, raw_value in filters:
+        sql_op = _FILTER_OPS[op]
+        if op == "contains":
+            args.append(f"%{raw_value}%")
+            where_parts.append(f'"{col}"::text ILIKE ${len(args)}')
+        else:
+            args.append(raw_value)
+            # Cast both sides to text for the typeless filter pipe; numeric/date
+            # comparisons still work because Postgres reverses the cast.
+            where_parts.append(f'"{col}" {sql_op} ${len(args)}')
+
+    use_keyset = sort is None and not filters and bool(pk_columns)
+
     async with pool.acquire() as conn:
-        if pk_columns:
+        if use_keyset:
+            assert pk_columns
             pk = pk_columns[0]
-            args: list[Any] = [limit]
-            where = ""
+            keyset_args: list[Any] = [limit]
+            keyset_where = ""
             if cursor:
                 cursor_val = _decode_cursor(cursor)
-                args.append(cursor_val)
-                where = f'WHERE "{pk}" > $2'
-            sql = f'SELECT {select_cols} FROM "{table_name}" {where} ORDER BY "{pk}" ASC LIMIT $1'
-            rows = await conn.fetch(sql, *args)
+                keyset_args.append(cursor_val)
+                keyset_where = f'WHERE "{pk}" > $2'
+            sql = (
+                f'SELECT {select_cols} FROM "{table_name}" {keyset_where} '
+                f'ORDER BY "{pk}" ASC LIMIT $1'
+            )
+            rows = await conn.fetch(sql, *keyset_args)
             next_cursor = None
             if len(rows) == limit:
-                last = rows[-1][pk]
-                next_cursor = _encode_cursor(last)
+                next_cursor = _encode_cursor(rows[-1][pk])
         else:
-            # No PK: degrade to offset pagination.
+            # Offset pagination for sort/filter cases (and PK-less tables).
             offset = int(cursor) if cursor and cursor.isdigit() else 0
-            sql = f'SELECT {select_cols} FROM "{table_name}" LIMIT $1 OFFSET $2'
-            rows = await conn.fetch(sql, limit, offset)
+            where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+            order_col = sort if sort is not None else (pk_columns[0] if pk_columns else None)
+            order_sql = (
+                f'ORDER BY "{order_col}" {direction.upper()}'
+                if order_col is not None
+                else ""
+            )
+            limit_placeholder = f"${len(args) + 1}"
+            offset_placeholder = f"${len(args) + 2}"
+            sql = (
+                f'SELECT {select_cols} FROM "{table_name}" {where_sql} {order_sql} '
+                f'LIMIT {limit_placeholder} OFFSET {offset_placeholder}'
+            )
+            rows = await conn.fetch(sql, *args, limit, offset)
             next_cursor = str(offset + limit) if len(rows) == limit else None
 
     serialized = [[_jsonable(v) for v in row.values()] for row in rows]

@@ -21,16 +21,23 @@ from anthropic.types import (
     ToolUseBlock,
 )
 
-from ..settings import get_settings
+from ..db import settings_repo
 
 
-def _client() -> AsyncAnthropic:
-    settings = get_settings()
-    if not settings.anthropic_api_key:
+async def _client() -> AsyncAnthropic:
+    key, _ = await settings_repo.effective_anthropic_key()
+    if not key:
         raise RuntimeError(
-            "Anthropic API key missing. Set STRUCTAI_ANTHROPIC_API_KEY in your env or .env."
+            "Anthropic API key missing. Set STRUCTAI_ANTHROPIC_API_KEY or save one from Settings."
         )
-    return AsyncAnthropic(api_key=settings.anthropic_api_key)
+    return AsyncAnthropic(api_key=key)
+
+
+async def _effective_model(model: str | None) -> str:
+    if model:
+        return model
+    fallback, _ = await settings_repo.effective_default_model()
+    return fallback
 
 
 def _block_input(block: ToolUseBlock) -> dict[str, Any]:
@@ -51,9 +58,8 @@ async def call_tool(
 ) -> dict[str, Any]:
     """Call the model with a forced tool choice and return its tool input dict."""
 
-    client = _client()
-    settings = get_settings()
-    chosen_model = model or settings.default_model
+    client = await _client()
+    chosen_model = await _effective_model(model)
 
     messages: list[MessageParam] = [{"role": "user", "content": user_blocks}]
     tool_choice: ToolChoiceToolParam = {"type": "tool", "name": tool["name"]}
@@ -105,9 +111,8 @@ async def agentic_loop(
     Bounded by ``max_iterations`` to keep cost predictable.
     """
 
-    client = _client()
-    settings = get_settings()
-    chosen_model = model or settings.default_model
+    client = await _client()
+    chosen_model = await _effective_model(model)
 
     messages: list[MessageParam] = [{"role": "user", "content": initial_user_blocks}]
     tool_choice: ToolChoiceAnyParam = {"type": "any"}

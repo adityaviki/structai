@@ -1,10 +1,36 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Database, Inbox, KeyRound, Link2, Table2 } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Database,
+  Filter,
+  Inbox,
+  KeyRound,
+  Link2,
+  Table2,
+  X,
+} from 'lucide-react'
 import clsx from 'clsx'
 import { api } from '../../api/client'
 import { useAsync } from '../../api/hooks'
-import type { RowsPage, TableDetail } from '../../api/types'
+import type { RowsPage, SchemaColumn, TableDetail } from '../../api/types'
+
+const NUMERIC_TYPES = new Set([
+  'integer',
+  'bigint',
+  'smallint',
+  'double precision',
+  'real',
+  'numeric',
+])
+
+const DATE_TYPES = new Set([
+  'date',
+  'timestamp without time zone',
+  'timestamp with time zone',
+])
 
 export function DataTab({ projectId }: { projectId: string }) {
   const { tableName } = useParams()
@@ -28,8 +54,8 @@ export function DataTab({ projectId }: { projectId: string }) {
         </div>
         <h3 className="mt-4 text-base font-medium">No tables yet</h3>
         <p className="mt-1 max-w-sm text-sm text-zinc-400">
-          Upload a CSV from the Documents tab and run an import — tables the agent creates will
-          appear here.
+          Upload a CSV/TSV/XLSX/JSON from the Documents tab and run an import — tables the agent
+          creates will appear here.
         </p>
       </div>
     )
@@ -80,6 +106,8 @@ export function DataTab({ projectId }: { projectId: string }) {
   )
 }
 
+type SortState = { col: string; dir: 'asc' | 'desc' } | null
+
 function TableView({ projectId, tableName }: { projectId: string; tableName: string }) {
   const { data: detail, loading: detailLoading, error: detailError } = useAsync(
     () => api.getTable(projectId, tableName),
@@ -89,41 +117,87 @@ function TableView({ projectId, tableName }: { projectId: string; tableName: str
   const [pages, setPages] = useState<RowsPage[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sort, setSort] = useState<SortState>(null)
+  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [showFilters, setShowFilters] = useState(false)
+
+  const activeFilters = useMemo(
+    () =>
+      Object.entries(filters)
+        .filter(([, v]) => v.trim().length > 0)
+        .map(([col, v]) => ({ col, op: defaultOpForColumn(detail?.columns.find((c) => c.name === col)), value: v.trim() })),
+    [filters, detail],
+  )
 
   useEffect(() => {
     setPages([])
     setError(null)
+    setSort(null)
+    setFilters({})
+    setShowFilters(false)
+  }, [projectId, tableName])
+
+  useEffect(() => {
+    if (!detail) return
     let cancelled = false
     setLoading(true)
-    api.getRows(projectId, tableName, { limit: 100 }).then(
-      (page) => {
-        if (!cancelled) setPages([page])
-        if (!cancelled) setLoading(false)
-      },
-      (err: Error) => {
-        if (!cancelled) {
-          setError(err.message)
-          setLoading(false)
-        }
-      },
-    )
+    api
+      .getRows(projectId, tableName, {
+        limit: 100,
+        sort: sort?.col,
+        dir: sort?.dir,
+        filters: activeFilters,
+      })
+      .then(
+        (page) => {
+          if (!cancelled) {
+            setPages([page])
+            setLoading(false)
+          }
+        },
+        (err: Error) => {
+          if (!cancelled) {
+            setError(err.message)
+            setLoading(false)
+          }
+        },
+      )
     return () => {
       cancelled = true
     }
-  }, [projectId, tableName])
+  }, [projectId, tableName, detail, sort?.col, sort?.dir, activeFilters])
 
   const loadMore = async () => {
     const last = pages[pages.length - 1]
     if (!last?.next_cursor) return
     setLoading(true)
     try {
-      const page = await api.getRows(projectId, tableName, { cursor: last.next_cursor, limit: 100 })
+      const page = await api.getRows(projectId, tableName, {
+        cursor: last.next_cursor,
+        limit: 100,
+        sort: sort?.col,
+        dir: sort?.dir,
+        filters: activeFilters,
+      })
       setPages((p) => [...p, page])
     } catch (err) {
       setError((err as Error).message)
     } finally {
       setLoading(false)
     }
+  }
+
+  const cycleSort = (col: string) => {
+    setSort((prev) => {
+      if (!prev || prev.col !== col) return { col, dir: 'asc' }
+      if (prev.dir === 'asc') return { col, dir: 'desc' }
+      return null
+    })
+  }
+
+  const clearAll = () => {
+    setSort(null)
+    setFilters({})
   }
 
   if (detailLoading) return <div className="p-6 text-sm text-zinc-500">Loading table…</div>
@@ -133,6 +207,7 @@ function TableView({ projectId, tableName }: { projectId: string; tableName: str
   const rows = pages.flatMap((p) => p.rows)
   const cols = pages[0]?.columns ?? detail.columns.map((c) => c.name)
   const hasMore = !!pages[pages.length - 1]?.next_cursor
+  const hasAnyFilter = sort !== null || activeFilters.length > 0
 
   return (
     <>
@@ -142,6 +217,36 @@ function TableView({ projectId, tableName }: { projectId: string; tableName: str
           <h2 className="font-mono text-base font-medium text-zinc-100">{detail.name}</h2>
           <span className="chip">{detail.row_count.toLocaleString()} rows</span>
           <span className="chip">{detail.columns.length} columns</span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900/30 p-3">
+        <button
+          onClick={() => setShowFilters((v) => !v)}
+          className={clsx(
+            'btn',
+            showFilters || activeFilters.length > 0
+              ? 'bg-brand-500/15 text-brand-200 hover:bg-brand-500/25'
+              : 'btn-secondary',
+          )}
+        >
+          <Filter className="h-3.5 w-3.5" />
+          Filters
+          {activeFilters.length > 0 && (
+            <span className="ml-0.5 rounded-full bg-brand-500/30 px-1.5 text-[10px] text-brand-100">
+              {activeFilters.length}
+            </span>
+          )}
+        </button>
+        {hasAnyFilter && (
+          <button onClick={clearAll} className="btn-ghost text-xs">
+            Clear all
+          </button>
+        )}
+        <div className="ml-auto text-xs text-zinc-500">
+          {loading
+            ? 'Loading…'
+            : `Showing ${rows.length.toLocaleString()} of ${detail.row_count.toLocaleString()}`}
         </div>
       </div>
 
@@ -167,15 +272,81 @@ function TableView({ projectId, tableName }: { projectId: string; tableName: str
               <th className="border-b border-zinc-800 px-3 py-2 text-right text-[11px] font-normal text-zinc-600 w-12">
                 #
               </th>
-              {cols.map((name) => (
-                <th
-                  key={name}
-                  className="border-b border-zinc-800 px-3 py-2 text-left text-[11px] font-medium text-zinc-400"
-                >
-                  <span className="text-zinc-200">{name}</span>
-                </th>
-              ))}
+              {cols.map((name) => {
+                const isSorted = sort?.col === name
+                return (
+                  <th
+                    key={name}
+                    className="border-b border-zinc-800 px-3 py-2 text-left text-[11px] font-medium text-zinc-400"
+                  >
+                    <button
+                      onClick={() => cycleSort(name)}
+                      className="group flex w-full items-center gap-1.5"
+                    >
+                      <span className="text-zinc-200">{name}</span>
+                      <span
+                        className={clsx(
+                          'ml-auto inline-flex h-4 w-4 items-center justify-center transition-opacity',
+                          isSorted
+                            ? 'opacity-100 text-brand-300'
+                            : 'opacity-0 group-hover:opacity-60 text-zinc-500',
+                        )}
+                      >
+                        {isSorted ? (
+                          sort?.dir === 'asc' ? (
+                            <ArrowUp className="h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="h-3 w-3" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="h-3 w-3" />
+                        )}
+                      </span>
+                    </button>
+                  </th>
+                )
+              })}
             </tr>
+            {showFilters && (
+              <tr>
+                <th className="border-b border-zinc-800 bg-zinc-950 px-2 py-1.5" />
+                {cols.map((name) => {
+                  const col = detail.columns.find((c) => c.name === name)
+                  const placeholder = filterPlaceholder(col)
+                  return (
+                    <th
+                      key={name}
+                      className="border-b border-zinc-800 bg-zinc-950 px-2 py-1.5"
+                    >
+                      <div className="flex items-center gap-1">
+                        <input
+                          className="w-full rounded-sm border border-zinc-800 bg-zinc-900 px-2 py-1 font-sans text-[11px] text-zinc-200 placeholder-zinc-600 outline-none focus:border-brand-500/60 focus:ring-1 focus:ring-brand-500/20"
+                          placeholder={placeholder}
+                          value={filters[name] ?? ''}
+                          onChange={(e) =>
+                            setFilters((f) => ({ ...f, [name]: e.target.value }))
+                          }
+                        />
+                        {filters[name] && (
+                          <button
+                            className="rounded-sm p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                            onClick={() =>
+                              setFilters((f) => {
+                                const { [name]: _omit, ...rest } = f
+                                return rest
+                              })
+                            }
+                            aria-label={`Clear ${name} filter`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+                    </th>
+                  )
+                })}
+              </tr>
+            )}
           </thead>
           <tbody>
             {rows.length === 0 && !loading && (
@@ -184,7 +355,7 @@ function TableView({ projectId, tableName }: { projectId: string; tableName: str
                   colSpan={cols.length + 1}
                   className="border-b border-zinc-900 py-10 text-center text-sm text-zinc-500"
                 >
-                  No rows
+                  No rows match
                 </td>
               </tr>
             )}
@@ -209,7 +380,8 @@ function TableView({ projectId, tableName }: { projectId: string; tableName: str
 
       <div className="flex items-center justify-between border-t border-zinc-800 bg-zinc-950 px-4 py-2 text-xs text-zinc-500">
         <span>
-          Showing {rows.length.toLocaleString()} of {detail.row_count.toLocaleString()}
+          {rows.length.toLocaleString()} of {detail.row_count.toLocaleString()}
+          {hasAnyFilter && ' (filtered/sorted)'}
         </span>
         <div className="flex items-center gap-2">
           {error && <span className="text-rose-400">{error}</span>}
@@ -222,6 +394,21 @@ function TableView({ projectId, tableName }: { projectId: string; tableName: str
       </div>
     </>
   )
+}
+
+function defaultOpForColumn(col: SchemaColumn | undefined): string {
+  if (!col) return 'contains'
+  if (NUMERIC_TYPES.has(col.type) || DATE_TYPES.has(col.type)) return 'eq'
+  if (col.type === 'boolean') return 'eq'
+  return 'contains'
+}
+
+function filterPlaceholder(col: SchemaColumn | TableDetail['columns'][number] | undefined): string {
+  if (!col) return 'Filter…'
+  if (NUMERIC_TYPES.has(col.type)) return `= number`
+  if (DATE_TYPES.has(col.type)) return `= YYYY-MM-DD`
+  if (col.type === 'boolean') return `= true/false`
+  return 'contains…'
 }
 
 function Cell({ value }: { value: string | number | boolean | null }) {

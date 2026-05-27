@@ -15,6 +15,9 @@ from .api.healthz import router as healthz_router
 from .api.projects import router as projects_router
 from .api.runs import router as runs_router
 from .api.schema import router as schema_router
+from .api.settings import project_router as project_settings_router
+from .api.settings import router as settings_router
+from .api.snapshots import router as snapshots_router
 from .api.tables import router as tables_router
 from .db.health import StartupCheckError
 from .db.health import run_all as run_startup_checks
@@ -77,6 +80,9 @@ def create_app() -> FastAPI:
     app.include_router(runs_router)
     app.include_router(tables_router)
     app.include_router(schema_router)
+    app.include_router(settings_router)
+    app.include_router(project_settings_router)
+    app.include_router(snapshots_router)
     return app
 
 

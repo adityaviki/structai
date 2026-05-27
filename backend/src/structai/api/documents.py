@@ -93,6 +93,49 @@ async def upload_document(project_id: str, file: UploadFile) -> DocumentOut:
     return _row_to_doc(row)
 
 
+@router.delete("/{document_id}", status_code=204)
+async def delete_document(project_id: str, document_id: str) -> None:
+    import shutil
+
+    from ..workspace.storage import document_dir
+
+    pools = get_pools()
+    meta = await pools.meta()
+    async with meta.acquire() as conn:
+        doc = await conn.fetchrow(
+            "SELECT * FROM documents WHERE id = $1 AND project_id = $2",
+            document_id,
+            project_id,
+        )
+        if doc is None:
+            raise ApiError(
+                status=404,
+                title="Not found",
+                detail=f"Document {document_id!r} not found.",
+            )
+        # Block delete if a non-final, non-reverted run still references it.
+        blockers = await conn.fetchval(
+            """
+            SELECT COUNT(*) FROM import_runs
+            WHERE document_id = $1
+              AND status NOT IN ('failed','cancelled','reverted')
+            """,
+            document_id,
+        )
+        if blockers and blockers > 0:
+            raise ApiError(
+                status=409,
+                title="In use",
+                detail="This document is referenced by a run that hasn't been reverted, cancelled, or failed. Undo or cancel those imports first.",
+            )
+        await conn.execute("DELETE FROM documents WHERE id = $1", document_id)
+
+    d = document_dir(document_id)
+    if d.exists():
+        shutil.rmtree(d, ignore_errors=True)
+    log.info("document.deleted", id=document_id, project_id=project_id)
+
+
 @router.get("", response_model=list[DocumentOut])
 async def list_documents(project_id: str) -> list[DocumentOut]:
     pools = get_pools()

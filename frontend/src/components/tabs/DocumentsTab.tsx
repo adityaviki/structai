@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowUpRight, FileUp, Play, Search, Upload } from 'lucide-react'
+import { ArrowUpRight, FileUp, Play, Search, Trash2, Upload } from 'lucide-react'
 import { FileIcon } from '../ui/FileIcon'
 import { StatusBadge } from '../ui/StatusBadge'
 import { api } from '../../api/client'
@@ -37,6 +37,16 @@ export function DocumentsTab({
     } finally {
       setUploading(false)
       if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  const deleteDoc = async (docId: string, name: string) => {
+    if (!confirm(`Delete ${name}? This removes the file from the workspace.`)) return
+    try {
+      await api.deleteDocument(projectId, docId)
+      reload()
+    } catch (err) {
+      setUploadError((err as Error).message)
     }
   }
 
@@ -128,6 +138,13 @@ export function DocumentsTab({
                   Run import
                 </button>
               )}
+              <button
+                onClick={() => void deleteDoc(d.id, d.name)}
+                className="btn-ghost text-xs text-rose-300/80 hover:bg-rose-500/10 hover:text-rose-200"
+                title="Delete document"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
             </div>
           </div>
         ))}

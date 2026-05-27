@@ -9,15 +9,17 @@ See [`PLAN.md`](./PLAN.md) for the full design and decision log.
 
 ## Status
 
-**Phase 5 — schema diagram.** The **Schema** tab now renders an
-interactive ER diagram of the project's Postgres database:
-``information_schema``/``pg_catalog`` introspection on the backend, a
-ReactFlow canvas with a custom `TableNode` and per-column handles, and
-dagre auto-layout for first render. Drag positions are debounced-saved
-per project so the diagram stays where you put it.
+**Phase 6 — polish.** Server-side **sort + per-column filters** on the
+Data tab (eq / contains / range). **Project deletion** drops every
+database and removes workspace files. **Document deletion** with safety
+checks. A **global Settings page** (API key, default model, snapshot
+retention) and a **per-project Settings tab** (model override +
+snapshot dashboard with pin/drop). A first-run banner nudges you to
+configure the API key.
 
 Earlier phase capabilities still apply:
 
+- **Phase 5:** interactive ER diagram with persisted layouts.
 - **Phase 4:** CSV / TSV / XLSX / JSON uploads, multi-region profile,
   multi-table imports with FK inference.
 - **Phase 3:** clarifications + auto mode.
@@ -25,8 +27,6 @@ Earlier phase capabilities still apply:
   retention sweeper, worker restart recovery.
 - **Phase 1:** profile / generate / execute / validate, live SSE
   progress, paginated data tab.
-
-Out of scope until Phase 6: row filters / sort and settings UI.
 
 ## Prerequisites
 
@@ -180,6 +180,34 @@ curl -X POST http://127.0.0.1:8000/api/runs/$RUN/undo
   - `GET /api/projects/:id/schema` — tables + columns + PK / FK metadata.
   - `GET /api/projects/:id/schema/layout` and
     `POST .../schema/layout` body `{positions: [{table_name, x, y}, ...]}`.
+
+## Exercising Phase 6
+
+- **Sort & filter:** open any imported table in the **Data** tab. Click
+  a column header to cycle asc → desc → off. Open the **Filters** panel
+  to filter by `contains` on text columns, equality or range on
+  numbers/dates, or boolean values. Results are server-paginated.
+- **Settings page** at `/settings`: configure the Anthropic API key (if
+  not already in env), pick a default model, set snapshot retention
+  (keep last N + max age in days).
+- **Project Settings tab** (per project): override the default model
+  just for that project; pin / drop snapshots in the dashboard.
+- **Delete project** from the project header → drops every DB, snapshot,
+  and workspace file owned by the project.
+- **Delete document** from the Documents tab (blocked if an active or
+  completed run still references it; reverted/cancelled/failed runs
+  don't block).
+- API additions:
+  - `GET /api/settings`, `PATCH /api/settings`,
+    `PUT /api/projects/:id/model`.
+  - `GET /api/projects/:id/snapshots`,
+    `POST .../snapshots/:run_id/pin`,
+    `DELETE .../snapshots/:run_id`.
+  - `DELETE /api/projects/:id`,
+    `DELETE /api/projects/:id/documents/:doc_id`.
+  - Sort / filter on
+    `GET /api/projects/:id/tables/:name/rows?sort=&dir=&filter=col:op:value`
+    (op ∈ `eq|neq|gt|gte|lt|lte|contains`).
 
 ## Layout
 

@@ -8,6 +8,9 @@ import type {
   ProjectWire,
   ProjectWithStats,
   RowsPage,
+  SettingsPatch,
+  SettingsWire,
+  SnapshotWire,
   TableDetail,
   TableSummary,
 } from './types'
@@ -63,6 +66,7 @@ export const api = {
   getProject: (id: string) => request<ProjectWire>('GET', `/api/projects/${id}`),
   createProject: (body: { name: string; description?: string; emoji?: string; color?: string }) =>
     request<ProjectWire>('POST', '/api/projects', body),
+  deleteProject: (id: string) => request<void>('DELETE', `/api/projects/${id}`),
 
   // Documents
   listDocuments: (projectId: string) =>
@@ -72,6 +76,8 @@ export const api = {
     form.append('file', file)
     return request<DocumentWire>('POST', `/api/projects/${projectId}/documents`, form)
   },
+  deleteDocument: (projectId: string, documentId: string) =>
+    request<void>('DELETE', `/api/projects/${projectId}/documents/${documentId}`),
 
   // Imports
   listImports: (projectId: string) =>
@@ -99,10 +105,25 @@ export const api = {
     request<TableSummary[]>('GET', `/api/projects/${projectId}/tables`),
   getTable: (projectId: string, name: string) =>
     request<TableDetail>('GET', `/api/projects/${projectId}/tables/${encodeURIComponent(name)}`),
-  getRows: (projectId: string, name: string, opts?: { cursor?: string; limit?: number }) => {
+  getRows: (
+    projectId: string,
+    name: string,
+    opts?: {
+      cursor?: string
+      limit?: number
+      sort?: string
+      dir?: 'asc' | 'desc'
+      filters?: { col: string; op: string; value: string }[]
+    },
+  ) => {
     const params = new URLSearchParams()
     if (opts?.cursor) params.set('cursor', opts.cursor)
     if (opts?.limit) params.set('limit', String(opts.limit))
+    if (opts?.sort) params.set('sort', opts.sort)
+    if (opts?.dir) params.set('dir', opts.dir)
+    for (const f of opts?.filters ?? []) {
+      params.append('filter', `${f.col}:${f.op}:${f.value}`)
+    }
     const q = params.toString() ? `?${params.toString()}` : ''
     return request<RowsPage>(
       'GET',
@@ -117,6 +138,25 @@ export const api = {
     request<ProjectLayout>('GET', `/api/projects/${projectId}/schema/layout`),
   saveLayout: (projectId: string, positions: LayoutPosition[]) =>
     request<ProjectLayout>('POST', `/api/projects/${projectId}/schema/layout`, { positions }),
+
+  // Settings
+  getSettings: () => request<SettingsWire>('GET', '/api/settings'),
+  patchSettings: (patch: SettingsPatch) =>
+    request<SettingsWire>('PATCH', '/api/settings', patch as Record<string, unknown>),
+  setProjectModel: (projectId: string, model_override: string | null) =>
+    request<{ model_override: string | null }>(
+      'PUT',
+      `/api/projects/${projectId}/model`,
+      { model_override },
+    ),
+
+  // Snapshots
+  listSnapshots: (projectId: string) =>
+    request<SnapshotWire[]>('GET', `/api/projects/${projectId}/snapshots`),
+  pinSnapshot: (projectId: string, runId: string) =>
+    request<SnapshotWire>('POST', `/api/projects/${projectId}/snapshots/${runId}/pin`),
+  deleteSnapshot: (projectId: string, runId: string) =>
+    request<void>('DELETE', `/api/projects/${projectId}/snapshots/${runId}`),
 }
 
 export function runEventsUrl(runId: string): string {

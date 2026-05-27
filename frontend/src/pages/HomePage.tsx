@@ -1,4 +1,13 @@
-import { ArrowRight, Database, FileSpreadsheet, Plus, Sparkles, Workflow } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowRight,
+  Database,
+  FileSpreadsheet,
+  Plus,
+  Settings as SettingsIcon,
+  Sparkles,
+  Workflow,
+} from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { Logo } from '../components/ui/Logo'
@@ -16,6 +25,7 @@ export function HomePage() {
   const navigate = useNavigate()
 
   const { data: projects, loading, error, reload } = useAsync(() => api.listProjects(), [])
+  const { data: settings } = useAsync(() => api.getSettings(), [])
 
   const closeModal = () => {
     setShowNew(false)
@@ -48,6 +58,9 @@ export function HomePage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <Logo />
           <div className="flex items-center gap-2">
+            <Link to="/settings" className="btn-ghost" title="Settings">
+              <SettingsIcon className="h-4 w-4" />
+            </Link>
             <button onClick={() => setShowNew(true)} className="btn-primary">
               <Plus className="h-4 w-4" />
               New project
@@ -57,6 +70,19 @@ export function HomePage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-10">
+        {settings && !settings.anthropic_key_present && (
+          <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+            <div className="flex-1 text-sm text-amber-100">
+              <p className="font-medium">No Anthropic API key configured.</p>
+              <p className="mt-0.5 text-amber-200/80">
+                Add one in <Link to="/settings" className="underline">Settings</Link> before
+                starting an import.
+              </p>
+            </div>
+          </div>
+        )}
+
         <section className="relative overflow-hidden rounded-2xl border border-zinc-900 bg-gradient-to-br from-zinc-900 via-zinc-950 to-zinc-950 p-8">
           <div className="absolute inset-0 grid-bg opacity-60" />
           <div className="absolute -top-32 -right-24 h-72 w-72 rounded-full bg-brand-500/20 blur-3xl" />

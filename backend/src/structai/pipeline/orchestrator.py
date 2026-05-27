@@ -261,6 +261,7 @@ async def run_import(run_id: str) -> None:
     doc_storage_path = str(record["document_storage_path"])
     doc_ext = str(record["document_ext"])
     instructions: str | None = record["instructions"]
+    model_override: str | None = record["project_model_override"]
     settings = get_settings()
     project_pg_url = with_database(settings.pg_url, project_db)
 
@@ -305,6 +306,7 @@ async def run_import(run_id: str) -> None:
             existing_tables=[],
             instructions=instructions,
             on_clarification=gen_clarify,
+            model=model_override,
         )
         await _emit_step(
             run_id,
@@ -408,6 +410,7 @@ async def run_import(run_id: str) -> None:
                 attempt_number=attempt,
                 instructions=instructions,
                 on_clarification=fix_clarify,
+                model=model_override,
             )
             await _emit_step(
                 run_id,

@@ -22,7 +22,8 @@ async def get_run(run_id: str) -> asyncpg.Record | None:
         return await conn.fetchrow(
             """
             SELECT r.*, d.name AS document_name, d.storage_path AS document_storage_path,
-                   d.ext AS document_ext, p.db_name AS project_db_name
+                   d.ext AS document_ext, p.db_name AS project_db_name,
+                   p.model_override AS project_model_override
             FROM import_runs r
             JOIN documents d ON d.id = r.document_id
             JOIN projects  p ON p.id = r.project_id

@@ -17,6 +17,7 @@ class ProjectOut(BaseModel):
     emoji: str | None
     color: str | None
     db_name: str
+    model_override: str | None = None
     created_at: datetime
     updated_at: datetime
 
