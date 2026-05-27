@@ -1,8 +1,4 @@
-"""Stage 3: execute the generated import script in a subprocess.
-
-Phase 1 implementation. Phase 2 will wrap this in a per-run snapshot and a
-real transaction (D15), and Phase 2 also adds the fix loop on failure.
-"""
+"""Stage 3: execute the generated import script in a subprocess."""
 
 from __future__ import annotations
 
@@ -11,10 +7,7 @@ import json
 import os
 import sys
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from pathlib import Path  # noqa: TC003 -- used at runtime in helper signatures
 
 
 @dataclass(slots=True)
@@ -26,6 +19,7 @@ class ExecuteResult:
     rows_imported: int | None
     tables_reported: list[str]
     timed_out: bool
+    cancelled: bool = False
 
 
 def _write_script(workdir: Path, source: str) -> Path:
@@ -49,8 +43,8 @@ def _parse_summary(stdout: str) -> tuple[int | None, list[str]]:
     """The script prints one final JSON line per the prompt contract."""
 
     last = None
-    for line in stdout.splitlines():
-        line = line.strip()
+    for raw in stdout.splitlines():
+        line = raw.strip()
         if line.startswith("{"):
             last = line
     if not last:
@@ -74,17 +68,18 @@ async def execute_script(
     workdir: Path,
     timeout_seconds: int = 300,
     python_executable: str | None = None,
+    cancel_event: asyncio.Event | None = None,
 ) -> ExecuteResult:
     """Run the generated script as a subprocess.
 
     Returns the result regardless of exit code; the caller decides how to
-    react to failures.
+    react to failures. If ``cancel_event`` is provided and gets set during
+    execution, the subprocess is terminated promptly and ``cancelled`` is
+    set on the result.
     """
 
     script_path = _write_script(workdir, script)
     env = _build_env()
-    # Hand the script the inputs it needs via argv; never via env, to make
-    # the contract explicit.
     cmd = [
         python_executable or sys.executable,
         "-u",
@@ -103,16 +98,41 @@ async def execute_script(
     )
 
     timed_out = False
-    try:
-        stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
-    except TimeoutError:
-        timed_out = True
+    cancelled = False
+
+    communicate_task = asyncio.create_task(proc.communicate())
+    aux_tasks: list[asyncio.Task[object]] = [
+        asyncio.create_task(asyncio.sleep(timeout_seconds), name="timeout"),
+    ]
+    if cancel_event is not None:
+        aux_tasks.append(asyncio.create_task(cancel_event.wait(), name="cancel"))
+
+    done, _pending = await asyncio.wait(
+        {communicate_task, *aux_tasks},
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+
+    # Always cancel the aux tasks — we never need them once one of them fires.
+    for t in aux_tasks:
+        if not t.done():
+            t.cancel()
+
+    if communicate_task in done:
+        stdout_b, stderr_b = communicate_task.result()
+    else:
+        for t in done:
+            if t.get_name() == "cancel":
+                cancelled = True
+            elif t.get_name() == "timeout":
+                timed_out = True
         proc.terminate()
         try:
-            stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=3)
+            stdout_b, stderr_b = await asyncio.wait_for(
+                asyncio.shield(communicate_task), timeout=3
+            )
         except TimeoutError:
             proc.kill()
-            stdout_b, stderr_b = await proc.communicate()
+            stdout_b, stderr_b = await communicate_task
 
     duration_ms = int((asyncio.get_event_loop().time() - start) * 1000)
     stdout = stdout_b.decode("utf-8", errors="replace")
@@ -127,4 +147,5 @@ async def execute_script(
         rows_imported=rows,
         tables_reported=tables,
         timed_out=timed_out,
+        cancelled=cancelled,
     )

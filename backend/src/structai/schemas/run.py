@@ -13,9 +13,12 @@ ImportStatus = Literal[
     "needs_clarification",
     "completed",
     "failed",
+    "cancelling",
+    "cancelled",
+    "reverted",
 ]
 
-PipelineStepKey = Literal["profile", "generate", "execute", "validate"]
+PipelineStepKey = Literal["profile", "generate", "execute", "fix", "validate"]
 PipelineStepStatus = Literal["pending", "running", "success", "error", "warning"]
 
 
@@ -53,4 +56,7 @@ class ImportRunOut(BaseModel):
     instructions: str | None = None
     auto_mode: bool
     error_message: str | None = None
+    undo_available: bool = False
+    reverted_at: datetime | None = None
+    reverted_by_run_id: str | None = None
     steps: list[PipelineStepOut] = []

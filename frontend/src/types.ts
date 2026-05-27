@@ -8,6 +8,9 @@ export type ImportStatus =
   | 'needs_clarification'
   | 'completed'
   | 'failed'
+  | 'cancelling'
+  | 'cancelled'
+  | 'reverted'
 
 export type DocumentStatus = 'uploaded' | 'importing' | 'imported' | 'failed' | 'needs_attention'
 

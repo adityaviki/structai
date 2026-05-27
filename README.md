@@ -9,14 +9,27 @@ See [`PLAN.md`](./PLAN.md) for the full design and decision log.
 
 ## Status
 
-**Phase 1 — vertical slice.** Full pipeline runs end-to-end for a single
-CSV: create a project, upload a file, the agent profiles it, writes an
-import script, executes it against the project's Postgres database, and
-validates the result. Imports are visible live (SSE) and the imported
-tables show up in the Data tab.
+**Phase 2 — robustness.** On top of Phase 1, the pipeline now:
 
-Out of scope until later phases: fix-on-error loop, undo, clarifications,
-XLSX/JSON/TSV, ER diagram, row filters/sort, settings UI.
+- Takes a Postgres template-database **snapshot** of the project DB
+  before each execute attempt.
+- Runs a **fix loop** (cap 5 attempts) when the import script fails:
+  the LLM gets the previous script + stderr tail and produces a fixed
+  replacement.
+- Supports **Stop** at any active stage. The subprocess is terminated,
+  the snapshot is dropped, the live DB is unchanged.
+- Supports **Undo** on completed imports. The project DB is restored
+  from the snapshot via an atomic rename swap. Later imports that
+  branched from the now-rewound state are marked reverted.
+- Has a **retention sweeper** (arq cron, hourly) that keeps the 10 most
+  recent snapshots per project and drops older ones.
+- On **worker restart**, any active-state runs that got interrupted are
+  marked failed (or cancelled if cancel was already requested) and their
+  snapshots are dropped.
+
+Out of scope until later phases: clarifications (Phase 3), XLSX/JSON/TSV
+and multi-table imports (Phase 4), ER diagram (Phase 5), row filters /
+sort and settings UI (Phase 6).
 
 ## Prerequisites
 
@@ -108,7 +121,27 @@ RUN=$(curl -s -X POST -H 'content-type: application/json' \
   http://127.0.0.1:8000/api/projects/$PROJECT/imports | jq -r .id)
 # Watch SSE:
 curl -N http://127.0.0.1:8000/api/runs/$RUN/events
+
+# Stop a still-running import:
+curl -X POST http://127.0.0.1:8000/api/runs/$RUN/cancel
+# Undo a completed import (the project DB rewinds atomically):
+curl -X POST http://127.0.0.1:8000/api/runs/$RUN/undo
 ```
+
+## Exercising Phase 2
+
+- **Fix loop:** upload a CSV that will trip up a naïve script — e.g. a
+  date column with mixed `MM/DD/YYYY` and `YYYY-MM-DD` formatting, or a
+  numeric column containing `"N/A"` strings. The first execute attempt
+  will fail; the run goes into `fixing`; the agent rewrites the script
+  and the second attempt succeeds. The run detail view shows each
+  attempt as its own step card.
+- **Stop:** while a run is in `executing` (long file), click **Stop**
+  on the run detail. The subprocess is killed, the snapshot is dropped,
+  the live project DB is unchanged.
+- **Undo:** on a completed import, click **Undo**. The project DB is
+  restored to its pre-run state. Any imports that ran after the one you
+  undid are also marked `reverted`.
 
 ## Layout
 

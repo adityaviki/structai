@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -9,7 +9,9 @@ import {
   CircleDashed,
   Hash,
   Loader2,
+  Octagon,
   Quote,
+  Undo2,
   XCircle,
   Zap,
 } from 'lucide-react'
@@ -20,18 +22,31 @@ import { FileIcon } from '../ui/FileIcon'
 import { StatusBadge } from '../ui/StatusBadge'
 import { formatDuration, formatRelative } from '../../data/mockData'
 
+const ACTIVE_STATUSES = new Set([
+  'queued',
+  'profiling',
+  'generating',
+  'executing',
+  'fixing',
+  'validating',
+  'needs_clarification',
+])
+
 const STEP_TITLES: Record<string, string> = {
   profile: 'Profile document',
   generate: 'Generate import script',
   execute: 'Execute import script',
+  fix: 'Diagnose & rewrite',
   validate: 'Validate import',
 }
 
 export function ImportDetail() {
   const { importId = '' } = useParams()
-  const navigate = useNavigate()
   const [run, setRun] = useState<ImportRunWire | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [actionPending, setActionPending] = useState<'cancel' | 'undo' | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [confirmUndo, setConfirmUndo] = useState(false)
   const esRef = useRef<EventSource | null>(null)
 
   useEffect(() => {
@@ -80,6 +95,34 @@ export function ImportDetail() {
 
   const baseSteps = ensureCanonicalSteps(run.steps)
   const projectId = run.project_id
+  const isActive = ACTIVE_STATUSES.has(run.status)
+
+  const onStop = async () => {
+    if (!confirm('Stop this import? The project database will revert to its state before the import started.')) return
+    setActionPending('cancel')
+    setActionError(null)
+    try {
+      await api.cancelRun(run.id)
+    } catch (err) {
+      setActionError((err as Error).message)
+    } finally {
+      setActionPending(null)
+    }
+  }
+
+  const onUndo = async () => {
+    setActionPending('undo')
+    setActionError(null)
+    try {
+      const updated = await api.undoRun(run.id)
+      setRun(updated)
+      setConfirmUndo(false)
+    } catch (err) {
+      setActionError((err as Error).message)
+    } finally {
+      setActionPending(null)
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -113,12 +156,64 @@ export function ImportDetail() {
               </div>
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            {isActive && run.status !== 'cancelling' && (
+              <button
+                className="btn-secondary"
+                onClick={() => void onStop()}
+                disabled={actionPending !== null}
+              >
+                <Octagon className="h-3.5 w-3.5" />
+                {actionPending === 'cancel' ? 'Stopping…' : 'Stop'}
+              </button>
+            )}
+            {run.undo_available && (
+              <button
+                className="btn-secondary"
+                onClick={() => setConfirmUndo(true)}
+                disabled={actionPending !== null}
+              >
+                <Undo2 className="h-3.5 w-3.5" />
+                Undo
+              </button>
+            )}
+          </div>
         </div>
+
+        {actionError && (
+          <p className="mt-2 text-sm text-rose-400">{actionError}</p>
+        )}
 
         <div className="mt-5">
           <Stepper steps={baseSteps} />
         </div>
       </div>
+
+      {confirmUndo && (
+        <div className="card border-amber-500/30 bg-amber-500/5 p-4">
+          <p className="text-sm font-medium text-amber-100">Undo this import?</p>
+          <p className="mt-1 text-xs text-amber-200/80">
+            The project database will be restored to its state before this run started.
+            Any imports that ran <em>after</em> this one will also be reverted.
+          </p>
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button
+              className="btn-ghost"
+              onClick={() => setConfirmUndo(false)}
+              disabled={actionPending === 'undo'}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn-primary"
+              onClick={() => void onUndo()}
+              disabled={actionPending === 'undo'}
+            >
+              {actionPending === 'undo' ? 'Undoing…' : 'Confirm undo'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {run.instructions && (
         <div className="card p-4">
@@ -197,16 +292,18 @@ function Summary({ label, value }: { label: string; value: string }) {
 }
 
 function ensureCanonicalSteps(received: PipelineStepWire[]): PipelineStepWire[] {
-  const keys: ('profile' | 'generate' | 'execute' | 'validate')[] = [
-    'profile',
-    'generate',
-    'execute',
-    'validate',
-  ]
-  const map = new Map(received.map((s) => [s.key, s] as const))
-  return keys.map(
-    (k) =>
-      map.get(k) ?? {
+  // Preserve every received step (so all fix attempts show up), but ensure
+  // the four canonical ones appear in order even if not yet started. Fix
+  // steps slot in between execute attempts.
+  const byKeyAttempt = new Map(received.map((s) => [`${s.key}:${s.attempts}`, s] as const))
+  const canonical: PipelineStepWire[] = []
+  const seen = new Set<string>()
+
+  for (const k of ['profile', 'generate', 'execute', 'validate'] as const) {
+    // Find all received entries with this key, sorted by attempts.
+    const matches = received.filter((s) => s.key === k).sort((a, b) => a.attempts - b.attempts)
+    if (matches.length === 0) {
+      canonical.push({
         key: k,
         title: STEP_TITLES[k] ?? k,
         status: 'pending' as PipelineStepStatus,
@@ -217,8 +314,32 @@ function ensureCanonicalSteps(received: PipelineStepWire[]): PipelineStepWire[] 
         errors: null,
         started_at: null,
         duration_ms: null,
-      },
-  )
+      })
+    } else {
+      for (const m of matches) {
+        canonical.push(m)
+        seen.add(`${m.key}:${m.attempts}`)
+      }
+      // After every execute attempt that failed, insert the matching fix step.
+      if (k === 'execute') {
+        for (const m of matches) {
+          const fixKey: `fix:${number}` = `fix:${m.attempts + 1}`
+          const fix = byKeyAttempt.get(fixKey)
+          if (fix) {
+            canonical.push(fix)
+            seen.add(fixKey)
+          }
+        }
+      }
+    }
+  }
+
+  // Anything left over (defensive).
+  for (const s of received) {
+    if (!seen.has(`${s.key}:${s.attempts}`)) canonical.push(s)
+  }
+
+  return canonical
 }
 
 function Stepper({ steps }: { steps: PipelineStepWire[] }) {

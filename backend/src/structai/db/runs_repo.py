@@ -91,6 +91,10 @@ async def set_run_status(
     total_rows: int | None = None,
     created_tables: list[str] | None = None,
     finished_at: datetime | None = None,
+    snapshot_db: str | None = None,
+    reverted_at: datetime | None = None,
+    reverted_by_run_id: str | None = None,
+    clear_snapshot: bool = False,
 ) -> None:
     meta = await get_pools().meta()
     sets: list[str] = ["status = $2"]
@@ -120,12 +124,50 @@ async def set_run_status(
         sets.append(f"finished_at = ${i}")
         args.append(finished_at)
         i += 1
+    if snapshot_db is not None:
+        sets.append(f"snapshot_db = ${i}")
+        args.append(snapshot_db)
+        i += 1
+    if clear_snapshot:
+        sets.append("snapshot_db = NULL")
+    if reverted_at is not None:
+        sets.append(f"reverted_at = ${i}")
+        args.append(reverted_at)
+        i += 1
+    if reverted_by_run_id is not None:
+        sets.append(f"reverted_by_run_id = ${i}")
+        args.append(reverted_by_run_id)
+        i += 1
 
     async with meta.acquire() as conn:
         await conn.execute(
             f"UPDATE import_runs SET {', '.join(sets)} WHERE id = $1",
             *args,
         )
+
+
+async def cancel_requested(run_id: str) -> bool:
+    meta = await get_pools().meta()
+    async with meta.acquire() as conn:
+        val = await conn.fetchval(
+            "SELECT cancel_requested FROM import_runs WHERE id = $1", run_id
+        )
+    return bool(val)
+
+
+async def request_cancel(run_id: str) -> bool:
+    """Set cancel_requested = true. Returns True if the row was updated."""
+
+    meta = await get_pools().meta()
+    async with meta.acquire() as conn:
+        result = await conn.execute(
+            "UPDATE import_runs SET cancel_requested = true "
+            "WHERE id = $1 AND status NOT IN ('completed','failed','cancelled','reverted')",
+            run_id,
+        )
+    # asyncpg returns "UPDATE n" — split and parse.
+    parts = result.split()
+    return bool(parts[0] == "UPDATE" and parts[1] != "0")
 
 
 async def upsert_step(

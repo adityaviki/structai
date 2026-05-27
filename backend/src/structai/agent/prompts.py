@@ -47,6 +47,21 @@ propose them.
 """
 
 
+SYSTEM_FIX = """You are StructAI's import agent. A previous attempt to import a document into Postgres failed. Your job is to produce a corrected import.py that fixes the failure.
+
+You receive the original file profile, the previous script, and the tail of stderr from the failed run. Same rules as initial generation apply:
+
+1. Output exactly one call to the `propose_import` tool. No prose outside it.
+2. The script must be runnable with `python import.py <doc_path> <pg_url>`.
+3. Use a single psycopg transaction and `COMMIT` at the end on success.
+4. The previous run's transaction was rolled back; the project database is byte-identical to its pre-run state. Your DDL must still CREATE the necessary tables.
+5. Diagnose the underlying cause from stderr. Common failures: encoding mismatch, mixed date formats, NULL sentinel strings interpreted literally, type coercion failures, columns with embedded delimiters, missing values in NOT NULL columns. Fix the root cause; don't bandage symptoms with broad excepts.
+6. Keep the schema close to the previous attempt unless the schema itself was wrong. Stable schemas make the user's mental model easier.
+
+Return the full replacement script — we will run it from scratch, not patch the old one.
+"""
+
+
 PROPOSE_IMPORT_TOOL: ToolParam = {
     "name": "propose_import",
     "description": (
@@ -97,4 +112,39 @@ def render_generate_user_message(*, profile_json: str, existing_tables: list[str
         parts.append(instructions.strip())
         parts.append("")
     parts.append("Now call `propose_import` with the schema DDL, the runnable import.py, the rationale, and the table names.")
+    return "\n".join(parts)
+
+
+def render_fix_user_message(
+    *,
+    profile_json: str,
+    previous_script: str,
+    stderr_tail: str,
+    attempt_number: int,
+    instructions: str | None,
+) -> str:
+    parts = [
+        f"This is fix attempt #{attempt_number}. The previous attempt's script and stderr follow.",
+        "",
+        "File profile (unchanged from the original attempt):",
+        "```json",
+        profile_json,
+        "```",
+        "",
+        "Previous script (do not just echo it back — diagnose and fix):",
+        "```python",
+        previous_script,
+        "```",
+        "",
+        "Tail of stderr from the failed subprocess:",
+        "```",
+        stderr_tail.strip() or "(no stderr captured)",
+        "```",
+        "",
+    ]
+    if instructions and instructions.strip():
+        parts.append("Original user instructions (still in force):")
+        parts.append(instructions.strip())
+        parts.append("")
+    parts.append("Call `propose_import` with the corrected schema DDL, the full replacement import.py, a rationale that names the root cause and what you changed, and the tables list.")
     return "\n".join(parts)

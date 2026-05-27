@@ -12,8 +12,11 @@ export type ImportStatus =
   | 'needs_clarification'
   | 'completed'
   | 'failed'
+  | 'cancelling'
+  | 'cancelled'
+  | 'reverted'
 
-export type PipelineStepKey = 'profile' | 'generate' | 'execute' | 'validate'
+export type PipelineStepKey = 'profile' | 'generate' | 'execute' | 'fix' | 'validate'
 export type PipelineStepStatus = 'pending' | 'running' | 'success' | 'error' | 'warning'
 
 export interface PipelineStepWire {
@@ -44,6 +47,9 @@ export interface ImportRunWire {
   instructions: string | null
   auto_mode: boolean
   error_message: string | null
+  undo_available: boolean
+  reverted_at: string | null
+  reverted_by_run_id: string | null
   steps: PipelineStepWire[]
 }
 

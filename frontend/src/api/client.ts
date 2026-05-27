@@ -77,6 +77,8 @@ export const api = {
     body: { document_id: string; instructions?: string; auto_mode?: boolean },
   ) => request<ImportRunWire>('POST', `/api/projects/${projectId}/imports`, body),
   getRun: (runId: string) => request<ImportRunWire>('GET', `/api/runs/${runId}`),
+  cancelRun: (runId: string) => request<{ status: string }>('POST', `/api/runs/${runId}/cancel`),
+  undoRun: (runId: string) => request<ImportRunWire>('POST', `/api/runs/${runId}/undo`),
 
   // Tables
   listTables: (projectId: string) =>

@@ -69,3 +69,26 @@ async def test_execute_timeout(tmp_path: Path) -> None:
     )
     assert res.timed_out
     assert res.exit_code != 0
+
+
+@pytest.mark.asyncio
+async def test_execute_cancel(tmp_path: Path) -> None:
+    import asyncio
+
+    cancel = asyncio.Event()
+
+    async def cancel_soon() -> None:
+        await asyncio.sleep(0.2)
+        cancel.set()
+
+    asyncio.create_task(cancel_soon())
+    res = await execute_script(
+        script=SCRIPT_SLOW,
+        doc_path=tmp_path / "x.csv",
+        pg_url="postgresql://dummy/none",
+        workdir=tmp_path / "run",
+        timeout_seconds=10,
+        cancel_event=cancel,
+    )
+    assert res.cancelled
+    assert not res.timed_out

@@ -5,6 +5,7 @@ import json
 from collections.abc import (
     AsyncIterator,  # noqa: TC003 -- used in async generator signature at runtime
 )
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import redis.asyncio as aioredis
@@ -13,10 +14,11 @@ from arq.connections import RedisSettings
 from fastapi import APIRouter, Request
 from sse_starlette.sse import EventSourceResponse
 
-from ..agent.events import channel
+from ..agent.events import channel, publish
 from ..db import runs_repo
 from ..db.ids import new_id
 from ..db.pools import get_pools
+from ..db.snapshots import drop_snapshot, restore_from_snapshot
 from ..logging import log
 from ..schemas.run import ImportRunIn, ImportRunOut, PipelineStepOut
 from ..settings import get_settings
@@ -49,7 +51,11 @@ def _step_record_to_out(row: asyncpg.Record) -> PipelineStepOut:
     )
 
 
-def _run_record_to_out(row: asyncpg.Record, steps: list[asyncpg.Record]) -> ImportRunOut:
+def _row_to_out(row: asyncpg.Record, steps: list[asyncpg.Record]) -> ImportRunOut:
+    undo_available = (
+        row["status"] == "completed"
+        and row["snapshot_db"] is not None
+    )
     return ImportRunOut(
         id=row["id"],
         project_id=row["project_id"],
@@ -65,8 +71,15 @@ def _run_record_to_out(row: asyncpg.Record, steps: list[asyncpg.Record]) -> Impo
         instructions=row["instructions"],
         auto_mode=row["auto_mode"],
         error_message=row["error_message"],
+        undo_available=undo_available,
+        reverted_at=row["reverted_at"],
+        reverted_by_run_id=row["reverted_by_run_id"],
         steps=[_step_record_to_out(s) for s in steps],
     )
+
+
+def _run_record_to_out(row: asyncpg.Record, steps: list[asyncpg.Record]) -> ImportRunOut:
+    return _row_to_out(row, steps)
 
 
 # ---------------------------------------------------------------------------
@@ -141,27 +154,7 @@ async def list_imports(project_id: str) -> list[ImportRunOut]:
     out: list[ImportRunOut] = []
     for row in rows:
         steps = await runs_repo.list_run_steps(row["id"])
-        # Re-fetch with joins so we have the join fields; for list view we can
-        # skip join columns since the serializer doesn't need them.
-        out.append(
-            ImportRunOut(
-                id=row["id"],
-                project_id=row["project_id"],
-                document_id=row["document_id"],
-                title=row["title"],
-                status=row["status"],
-                progress=row["progress"],
-                started_at=row["started_at"],
-                finished_at=row["finished_at"],
-                rows_imported=row["rows_imported"],
-                total_rows=row["total_rows"],
-                created_tables=list(row["created_tables"]) if row["created_tables"] is not None else None,
-                instructions=row["instructions"],
-                auto_mode=row["auto_mode"],
-                error_message=row["error_message"],
-                steps=[_step_record_to_out(s) for s in steps],
-            )
-        )
+        out.append(_row_to_out(row, steps))
     return out
 
 
@@ -224,3 +217,101 @@ async def _event_stream(request: Request, run_id: str) -> AsyncIterator[dict[str
 @router.get("/runs/{run_id}/events")
 async def run_events(run_id: str, request: Request) -> EventSourceResponse:
     return EventSourceResponse(_event_stream(request, run_id))
+
+
+@router.post("/runs/{run_id}/undo", status_code=200, response_model=ImportRunOut)
+async def undo_run(run_id: str) -> ImportRunOut:
+    run = await runs_repo.get_run(run_id)
+    if run is None:
+        raise ApiError(status=404, title="Not found", detail=f"Run {run_id!r} not found.")
+    if run["status"] != "completed":
+        raise ApiError(
+            status=409,
+            title="Not undoable",
+            detail=f"Only completed runs can be undone (got {run['status']}).",
+        )
+    if not run["snapshot_db"]:
+        raise ApiError(
+            status=409,
+            title="Snapshot expired",
+            detail="The undo snapshot for this run has been removed (retention).",
+        )
+
+    settings = get_settings()
+    pools = get_pools()
+    meta = await pools.meta()
+
+    # Find later runs whose snapshots we'll have to discard. They become
+    # logically reverted because we're rewinding past their start times.
+    async with meta.acquire() as conn:
+        later_rows = await conn.fetch(
+            """
+            SELECT id, snapshot_db
+            FROM import_runs
+            WHERE project_id = $1
+              AND started_at > $2
+              AND status IN ('completed','failed')
+            ORDER BY started_at ASC
+            """,
+            run["project_id"],
+            run["started_at"],
+        )
+
+    # Restore.
+    await restore_from_snapshot(
+        settings=settings,
+        project_db=run["project_db_name"],
+        snapshot_db=run["snapshot_db"],
+    )
+
+    # Mark the run reverted, and clear its snapshot (it was just consumed by
+    # the rename swap).
+    now = datetime.now(UTC)
+    await runs_repo.set_run_status(
+        run_id=run_id,
+        status="reverted",
+        reverted_at=now,
+        clear_snapshot=True,
+    )
+    await publish(run_id, {"type": "reverted"})
+
+    # Mark later runs reverted (by side effect) and drop their snapshots.
+    for r in later_rows:
+        await runs_repo.set_run_status(
+            run_id=r["id"],
+            status="reverted",
+            reverted_at=now,
+            reverted_by_run_id=run_id,
+            clear_snapshot=True,
+        )
+        if r["snapshot_db"]:
+            try:
+                await drop_snapshot(settings=settings, snapshot_db=r["snapshot_db"])
+            except Exception:  # noqa: BLE001
+                log.exception("undo.later_snapshot_drop_failed", run_id=r["id"])
+        await publish(r["id"], {"type": "reverted", "by": run_id})
+
+    refreshed = await runs_repo.get_run(run_id)
+    steps = await runs_repo.list_run_steps(run_id)
+    assert refreshed is not None
+    return _row_to_out(refreshed, steps)
+
+
+@router.post("/runs/{run_id}/cancel", status_code=202)
+async def cancel_run(run_id: str) -> dict[str, str]:
+    run = await runs_repo.get_run(run_id)
+    if run is None:
+        raise ApiError(status=404, title="Not found", detail=f"Run {run_id!r} not found.")
+    if run["status"] in {"completed", "failed", "cancelled", "reverted"}:
+        raise ApiError(
+            status=409,
+            title="Run is final",
+            detail=f"Cannot cancel a {run['status']} run.",
+        )
+    updated = await runs_repo.request_cancel(run_id)
+    if updated:
+        # Surface "cancelling" in the UI immediately; the worker will flip to
+        # "cancelled" once cleanup completes.
+        await runs_repo.set_run_status(run_id=run_id, status="cancelling")
+        await publish(run_id, {"type": "run_status", "status": "cancelling"})
+    return {"status": "cancelling"}

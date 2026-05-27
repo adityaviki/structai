@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .agent import events as agent_events
 from .api.dev import router as dev_router
 from .api.documents import router as documents_router
 from .api.errors import ApiError, api_error_handler
@@ -42,6 +43,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         await get_pools().close()
+        await agent_events.close()
 
 
 def create_app() -> FastAPI:

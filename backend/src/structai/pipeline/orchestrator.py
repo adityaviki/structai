@@ -1,32 +1,50 @@
-"""Orchestrates the import pipeline as an arq job.
+"""Orchestrates the import pipeline as an arq job (Phase 2).
 
-Phase 1 sequence:
+Pipeline:
 
-    profile  →  generate  →  execute  →  validate  →  completed
+    profile → generate → (snapshot) → execute → [fix → execute] × ≤MAX_FIX → validate
+                                                ^                          ^
+                                                |                          |
+                                                +- bounded retry loop -----+
 
-No fix loop, no clarifications yet (those land in Phase 2 / Phase 3).
+Per D15: a per-run Postgres template-DB snapshot is created before the
+first execute attempt and serves as the rollback point. On any non-success
+terminus (failure, cancel, max-fixes-exceeded, validate fails) the
+snapshot is either dropped (live DB is byte-identical to pre-run) or used
+to restore (validate failed *after* a successful execute committed).
 """
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from datetime import UTC, datetime
 from typing import Any
 
 from ..agent import events
-from ..agent.client import call_tool  # noqa: F401  (imported to surface errors early)
 from ..db import runs_repo
 from ..db.pool import with_database
+from ..db.snapshots import create_snapshot, drop_snapshot, restore_from_snapshot
 from ..logging import log
 from ..settings import get_settings
 from ..workspace.storage import run_dir, workspace_root
-from .execute import execute_script
+from .execute import ExecuteResult, execute_script
+from .fix import fix_import
 from .generate import generate_import
 from .profile import profile_document
 from .validate import validate_project
 
+MAX_FIX_ATTEMPTS = 5
+
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _snapshot_name(project_db: str, run_id: str) -> str:
+    short = run_id[:12].lower()
+    base = f"{project_db}_snap_{short}"
+    return base[:63]
 
 
 async def _emit_step(
@@ -41,6 +59,7 @@ async def _emit_step(
     started_at: datetime | None = None,
     duration_ms: int | None = None,
     errors: list[str] | None = None,
+    attempts: int = 1,
 ) -> None:
     await runs_repo.upsert_step(
         run_id=run_id,
@@ -53,6 +72,7 @@ async def _emit_step(
         started_at=started_at,
         duration_ms=duration_ms,
         errors=errors,
+        attempts=attempts,
     )
     await events.publish(
         run_id,
@@ -64,6 +84,7 @@ async def _emit_step(
             "summary": summary,
             "duration_ms": duration_ms,
             "errors": errors,
+            "attempts": attempts,
         },
     )
 
@@ -76,15 +97,37 @@ async def _set_status(
     **kwargs: Any,
 ) -> None:
     await runs_repo.set_run_status(run_id=run_id, status=status, progress=progress, **kwargs)
-    await events.publish(
-        run_id,
-        {"type": "run_status", "status": status, "progress": progress},
-    )
+    await events.publish(run_id, {"type": "run_status", "status": status, "progress": progress})
+
+
+class _CancelledError(Exception):
+    """Raised by _check_cancel to unwind the pipeline cleanly."""
+
+
+async def _check_cancel(run_id: str) -> None:
+    if await runs_repo.cancel_requested(run_id):
+        raise _CancelledError
+
+
+async def _cancel_watchdog(run_id: str, cancel_event: asyncio.Event) -> None:
+    """Background task: polls the DB and sets the event if cancel is requested.
+
+    Phase 2 simple polling. The Redis pubsub-driven wake-up is the icing
+    we add when it matters; at one-import-per-worker scale a 1s poll is
+    invisible.
+    """
+
+    try:
+        while not cancel_event.is_set():
+            if await runs_repo.cancel_requested(run_id):
+                cancel_event.set()
+                return
+            await asyncio.sleep(1)
+    except asyncio.CancelledError:
+        return
 
 
 async def run_import(run_id: str) -> None:
-    """Top-level pipeline entry. Called by the arq worker."""
-
     log.info("orchestrator.start", run_id=run_id)
     record = await runs_repo.get_run(run_id)
     if record is None:
@@ -94,181 +137,244 @@ async def run_import(run_id: str) -> None:
     project_db = str(record["project_db_name"])
     doc_storage_path = str(record["document_storage_path"])
     doc_ext = str(record["document_ext"])
-    instructions = record["instructions"]
+    instructions: str | None = record["instructions"]
+    settings = get_settings()
+    project_pg_url = with_database(settings.pg_url, project_db)
 
     doc_path = (workspace_root() / doc_storage_path).resolve()
-    workdir = run_dir(run_id) / "attempt-1"
+    workdir_root = run_dir(run_id)
 
-    # ------------------------------------------------------------------
-    # Profile
-    # ------------------------------------------------------------------
-    await _set_status(run_id, "profiling", progress=10)
-    started = _now()
+    snapshot_db = _snapshot_name(project_db, run_id)
+    snapshot_taken = False
+
+    cancel_event = asyncio.Event()
+    watchdog = asyncio.create_task(_cancel_watchdog(run_id, cancel_event))
+
     try:
+        # --- profile ---
+        await _check_cancel(run_id)
+        await _set_status(run_id, "profiling", progress=10)
+        started = _now()
         profile = profile_document(doc_path, doc_ext)
-    except Exception as exc:  # noqa: BLE001
         await _emit_step(
             run_id,
             step_key="profile",
-            status="error",
+            status="success",
             title="Profile document",
-            errors=[str(exc)],
+            summary=f"{profile.total_rows} rows · {len(profile.columns)} columns",
             started_at=started,
             duration_ms=int((_now() - started).total_seconds() * 1000),
         )
-        await _set_status(
-            run_id, "failed", progress=10, error_message=f"Profile failed: {exc}", finished_at=_now()
-        )
-        await events.publish(run_id, {"type": "failed"})
-        return
 
-    await _emit_step(
-        run_id,
-        step_key="profile",
-        status="success",
-        title="Profile document",
-        summary=f"{profile.total_rows} rows · {len(profile.columns)} columns",
-        started_at=started,
-        duration_ms=int((_now() - started).total_seconds() * 1000),
-    )
-
-    # ------------------------------------------------------------------
-    # Generate
-    # ------------------------------------------------------------------
-    await _set_status(run_id, "generating", progress=30)
-    started = _now()
-    try:
+        # --- generate (attempt 1) ---
+        await _check_cancel(run_id)
+        await _set_status(run_id, "generating", progress=25)
+        started = _now()
         gen = await generate_import(
             profile=profile,
-            existing_tables=[],  # Phase 1: skip schema introspection of project DB.
+            existing_tables=[],
             instructions=instructions,
         )
-    except Exception as exc:  # noqa: BLE001
         await _emit_step(
             run_id,
             step_key="generate",
-            status="error",
+            status="success",
             title="Generate import script",
-            errors=[str(exc)],
+            summary=gen.rationale,
+            code=gen.import_script,
+            language="python",
             started_at=started,
             duration_ms=int((_now() - started).total_seconds() * 1000),
         )
-        await _set_status(
-            run_id, "failed", progress=30, error_message=f"Generate failed: {exc}", finished_at=_now()
+
+        # --- snapshot ---
+        await _check_cancel(run_id)
+        await create_snapshot(settings=settings, project_db=project_db, snapshot_db=snapshot_db)
+        snapshot_taken = True
+        await _set_status(run_id, "generating", progress=35, snapshot_db=snapshot_db)
+
+        # --- execute / fix loop ---
+        attempt = 1
+        current = gen
+        execute_res: ExecuteResult | None = None
+        while True:
+            await _check_cancel(run_id)
+            await _set_status(run_id, "executing", progress=40 + (attempt - 1) * 10)
+            started = _now()
+            workdir = workdir_root / f"attempt-{attempt}"
+            execute_res = await execute_script(
+                script=current.import_script,
+                doc_path=doc_path,
+                pg_url=project_pg_url,
+                workdir=workdir,
+                cancel_event=cancel_event,
+            )
+            (workdir / "stdout.log").write_text(execute_res.stdout)
+            (workdir / "stderr.log").write_text(execute_res.stderr)
+
+            if execute_res.cancelled:
+                raise _CancelledError
+
+            if execute_res.exit_code == 0 and not execute_res.timed_out:
+                await _emit_step(
+                    run_id,
+                    step_key="execute",
+                    status="success",
+                    title="Execute import script",
+                    summary=f"{execute_res.rows_imported or 0} rows · {', '.join(execute_res.tables_reported) or '(no tables reported)'}",
+                    started_at=started,
+                    duration_ms=execute_res.duration_ms,
+                    attempts=attempt,
+                )
+                break
+
+            # Failure path.
+            err_tail = "\n".join(execute_res.stderr.splitlines()[-40:])
+            await _emit_step(
+                run_id,
+                step_key="execute",
+                status="error",
+                title="Execute import script",
+                summary="Timed out" if execute_res.timed_out else f"Exit code {execute_res.exit_code}",
+                code=current.import_script,
+                language="python",
+                errors=[err_tail] if err_tail else None,
+                started_at=started,
+                duration_ms=execute_res.duration_ms,
+                attempts=attempt,
+            )
+
+            if attempt >= MAX_FIX_ATTEMPTS:
+                if snapshot_taken:
+                    await drop_snapshot(settings=settings, snapshot_db=snapshot_db)
+                    snapshot_taken = False
+                await _set_status(
+                    run_id,
+                    "failed",
+                    progress=80,
+                    error_message=f"Gave up after {MAX_FIX_ATTEMPTS} attempts.",
+                    finished_at=_now(),
+                    clear_snapshot=True,
+                )
+                await events.publish(run_id, {"type": "failed"})
+                return
+
+            # --- fix (next attempt) ---
+            await _check_cancel(run_id)
+            attempt += 1
+            await _set_status(run_id, "fixing", progress=40 + (attempt - 1) * 10)
+            started = _now()
+            current = await fix_import(
+                profile=profile,
+                previous_script=current.import_script,
+                stderr_tail=err_tail,
+                attempt_number=attempt,
+                instructions=instructions,
+            )
+            await _emit_step(
+                run_id,
+                step_key="fix",
+                status="success",
+                title=f"Diagnose & rewrite (attempt {attempt})",
+                summary=current.rationale,
+                code=current.import_script,
+                language="python",
+                started_at=started,
+                duration_ms=int((_now() - started).total_seconds() * 1000),
+                attempts=attempt,
+            )
+            # Loop back to execute.
+
+        # --- validate ---
+        await _check_cancel(run_id)
+        await _set_status(run_id, "validating", progress=90)
+        started = _now()
+        assert execute_res is not None
+        val = await validate_project(
+            db_name=project_db,
+            reported_tables=execute_res.tables_reported,
+            reported_rows=execute_res.rows_imported,
         )
-        await events.publish(run_id, {"type": "failed"})
-        return
-
-    await _emit_step(
-        run_id,
-        step_key="generate",
-        status="success",
-        title="Generate import script",
-        summary=gen.rationale,
-        code=gen.import_script,
-        language="python",
-        started_at=started,
-        duration_ms=int((_now() - started).total_seconds() * 1000),
-    )
-
-    # ------------------------------------------------------------------
-    # Execute
-    # ------------------------------------------------------------------
-    await _set_status(run_id, "executing", progress=60)
-    started = _now()
-    settings = get_settings()
-    project_pg_url = with_database(settings.pg_url, project_db)
-    exe = await execute_script(
-        script=gen.import_script,
-        doc_path=doc_path,
-        pg_url=project_pg_url,
-        workdir=workdir,
-    )
-    (workdir / "stdout.log").write_text(exe.stdout)
-    (workdir / "stderr.log").write_text(exe.stderr)
-
-    if exe.exit_code != 0 or exe.timed_out:
-        err_tail = "\n".join(exe.stderr.splitlines()[-30:])
+        summary_lines = [f"- `{t.table}`: {t.row_count} rows" for t in val.tables]
+        if val.warnings:
+            summary_lines += ["", "Warnings:", *(f"- {w}" for w in val.warnings)]
+        step_status = "success" if val.ok else "error"
         await _emit_step(
             run_id,
-            step_key="execute",
-            status="error",
-            title="Execute import script",
-            summary=("Timed out" if exe.timed_out else f"Exit code {exe.exit_code}"),
-            errors=[err_tail] if err_tail else None,
+            step_key="validate",
+            status=step_status,
+            title="Validate import",
+            summary="\n".join(summary_lines) if summary_lines else None,
+            errors=val.errors or None,
             started_at=started,
-            duration_ms=exe.duration_ms,
+            duration_ms=int((_now() - started).total_seconds() * 1000),
         )
+
+        if not val.ok:
+            if snapshot_taken:
+                await restore_from_snapshot(
+                    settings=settings, project_db=project_db, snapshot_db=snapshot_db
+                )
+                snapshot_taken = False
+            await _set_status(
+                run_id,
+                "failed",
+                progress=95,
+                error_message="; ".join(val.errors) or "Validation failed.",
+                rows_imported=val.total_rows,
+                created_tables=execute_res.tables_reported,
+                finished_at=_now(),
+                clear_snapshot=True,
+            )
+            await events.publish(run_id, {"type": "failed"})
+            return
+
         await _set_status(
             run_id,
-            "failed",
-            progress=60,
-            error_message=f"Execute failed (exit={exe.exit_code}, timed_out={exe.timed_out}).",
-            finished_at=_now(),
-        )
-        await events.publish(run_id, {"type": "failed"})
-        return
-
-    await _emit_step(
-        run_id,
-        step_key="execute",
-        status="success",
-        title="Execute import script",
-        summary=f"{exe.rows_imported or 0} rows · {', '.join(exe.tables_reported)}",
-        started_at=started,
-        duration_ms=exe.duration_ms,
-    )
-
-    # ------------------------------------------------------------------
-    # Validate
-    # ------------------------------------------------------------------
-    await _set_status(run_id, "validating", progress=85)
-    started = _now()
-    val = await validate_project(
-        db_name=project_db,
-        reported_tables=exe.tables_reported,
-        reported_rows=exe.rows_imported,
-    )
-    summary_lines: list[str] = []
-    for t in val.tables:
-        summary_lines.append(f"- `{t.table}`: {t.row_count} rows")
-    if val.warnings:
-        summary_lines.append("")
-        summary_lines.append("Warnings:")
-        summary_lines.extend(f"- {w}" for w in val.warnings)
-    step_status = "success" if val.ok else "error"
-    await _emit_step(
-        run_id,
-        step_key="validate",
-        status=step_status,
-        title="Validate import",
-        summary="\n".join(summary_lines) if summary_lines else None,
-        errors=val.errors or None,
-        started_at=started,
-        duration_ms=int((_now() - started).total_seconds() * 1000),
-    )
-
-    if not val.ok:
-        await _set_status(
-            run_id,
-            "failed",
-            progress=95,
-            error_message="; ".join(val.errors),
+            "completed",
+            progress=100,
             rows_imported=val.total_rows,
-            created_tables=exe.tables_reported,
+            total_rows=val.total_rows,
+            created_tables=execute_res.tables_reported,
             finished_at=_now(),
         )
-        await events.publish(run_id, {"type": "failed"})
-        return
+        await events.publish(run_id, {"type": "completed"})
+        log.info("orchestrator.complete", run_id=run_id, rows=val.total_rows, attempts=attempt)
 
-    await _set_status(
-        run_id,
-        "completed",
-        progress=100,
-        rows_imported=val.total_rows,
-        total_rows=val.total_rows,
-        created_tables=exe.tables_reported,
-        finished_at=_now(),
-    )
-    await events.publish(run_id, {"type": "completed"})
-    log.info("orchestrator.complete", run_id=run_id, rows=val.total_rows)
+    except _CancelledError:
+        if snapshot_taken:
+            await drop_snapshot(settings=settings, snapshot_db=snapshot_db)
+        await _set_status(
+            run_id,
+            "cancelled",
+            progress=None,
+            error_message="Cancelled by user.",
+            finished_at=_now(),
+            clear_snapshot=True,
+        )
+        await events.publish(run_id, {"type": "cancelled"})
+        log.info("orchestrator.cancelled", run_id=run_id)
+
+    except Exception as exc:  # noqa: BLE001
+        if snapshot_taken:
+            try:
+                await drop_snapshot(settings=settings, snapshot_db=snapshot_db)
+            except Exception:  # noqa: BLE001
+                log.exception("orchestrator.snapshot_cleanup_failed", run_id=run_id)
+        await _set_status(
+            run_id,
+            "failed",
+            error_message=f"Unhandled error: {exc!s}",
+            finished_at=_now(),
+            clear_snapshot=True,
+        )
+        await events.publish(run_id, {"type": "failed"})
+        log.exception("orchestrator.failed", run_id=run_id)
+
+    finally:
+        watchdog.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await watchdog
+
+
+__all__ = ["MAX_FIX_ATTEMPTS", "run_import"]

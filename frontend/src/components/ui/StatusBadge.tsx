@@ -6,6 +6,8 @@ import {
   CircleHelp,
   Hourglass,
   Loader2,
+  Octagon,
+  Undo2,
   Wrench,
   XCircle,
 } from 'lucide-react'
@@ -31,6 +33,9 @@ const config: Record<
   },
   completed: { label: 'Imported', tone: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30', Icon: CheckCircle2 },
   failed: { label: 'Failed', tone: 'text-red-300 bg-red-500/10 border-red-500/30', Icon: XCircle },
+  cancelling: { label: 'Stopping…', tone: 'text-zinc-300 bg-zinc-800/60 border-zinc-700/60', Icon: Loader2, spin: true },
+  cancelled: { label: 'Cancelled', tone: 'text-zinc-300 bg-zinc-800/60 border-zinc-700/60', Icon: Octagon },
+  reverted: { label: 'Reverted', tone: 'text-zinc-300 bg-zinc-800/60 border-zinc-700/60', Icon: Undo2 },
 
   /* Documents */
   uploaded: { label: 'Ready to import', tone: 'text-zinc-300 bg-zinc-800/60 border-zinc-700/60', Icon: CircleDashed },
