@@ -1,0 +1,360 @@
+import { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Bot,
+  CheckCircle2,
+  Circle,
+  CircleDashed,
+  Hash,
+  Loader2,
+  Quote,
+  XCircle,
+  Zap,
+} from 'lucide-react'
+import clsx from 'clsx'
+import type { ImportRunWire, PipelineStepWire, PipelineStepStatus } from '../../api/types'
+import { api, runEventsUrl } from '../../api/client'
+import { FileIcon } from '../ui/FileIcon'
+import { StatusBadge } from '../ui/StatusBadge'
+import { formatDuration, formatRelative } from '../../data/mockData'
+
+const STEP_TITLES: Record<string, string> = {
+  profile: 'Profile document',
+  generate: 'Generate import script',
+  execute: 'Execute import script',
+  validate: 'Validate import',
+}
+
+export function ImportDetail() {
+  const { importId = '' } = useParams()
+  const navigate = useNavigate()
+  const [run, setRun] = useState<ImportRunWire | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const esRef = useRef<EventSource | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    api.getRun(importId).then(
+      (r) => {
+        if (!cancelled) setRun(r)
+      },
+      (err: Error) => {
+        if (!cancelled) setError(err.message)
+      },
+    )
+
+    const es = new EventSource(runEventsUrl(importId))
+    esRef.current = es
+
+    es.addEventListener('snapshot', (ev) => {
+      try {
+        const data = JSON.parse((ev as MessageEvent).data) as ImportRunWire
+        setRun(data)
+      } catch {
+        /* ignore */
+      }
+    })
+
+    es.addEventListener('message', () => {
+      // Any backend event → refetch the canonical run for simplicity. Phase 1.
+      api.getRun(importId).then(
+        (r) => setRun(r),
+        () => {},
+      )
+    })
+
+    es.onerror = () => {
+      es.close()
+    }
+
+    return () => {
+      cancelled = true
+      es.close()
+    }
+  }, [importId])
+
+  if (error) return <p className="text-sm text-rose-400">{error}</p>
+  if (!run) return <p className="text-sm text-zinc-500">Loading run…</p>
+
+  const baseSteps = ensureCanonicalSteps(run.steps)
+  const projectId = run.project_id
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <Link
+          to={`/projects/${projectId}/imports`}
+          className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200"
+        >
+          <ArrowLeft className="h-3 w-3" /> All imports
+        </Link>
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <FileIcon ext="csv" className="h-10 w-10 text-base" />
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-semibold">{run.title}</h1>
+                {run.auto_mode && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-brand-500/30 bg-brand-500/10 px-2 py-0.5 text-[11px] font-medium text-brand-300">
+                    <Zap className="h-3 w-3" />
+                    Auto mode
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+                <StatusBadge status={run.status} />
+                <span>{run.status === 'queued' ? 'Queued' : 'Started'} {formatRelative(run.started_at)}</span>
+                {run.finished_at && <span>· Finished {formatRelative(run.finished_at)}</span>}
+                {typeof run.rows_imported === 'number' && (
+                  <span>· {run.rows_imported.toLocaleString()} rows</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <Stepper steps={baseSteps} />
+        </div>
+      </div>
+
+      {run.instructions && (
+        <div className="card p-4">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-400">
+              <Quote className="h-3.5 w-3.5" />
+            </span>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+                Your instructions to the agent
+              </p>
+              <p className="mt-1 whitespace-pre-line text-sm text-zinc-200">{run.instructions}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {run.error_message && (
+        <div className="card border-red-500/30 bg-red-500/5 p-4 text-sm text-red-200">
+          <p className="font-medium text-red-100">Run failed</p>
+          <p className="mt-1">{run.error_message}</p>
+        </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-3">
+          {baseSteps.map((s, i) => (
+            <StepCard key={`${s.key}-${s.attempts}`} step={s} index={i} />
+          ))}
+        </div>
+
+        <aside className="space-y-3">
+          <div className="card p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-zinc-100">
+              <Bot className="h-4 w-4 text-brand-400" />
+              Run summary
+            </div>
+            <dl className="mt-3 space-y-2 text-xs text-zinc-400">
+              <Summary label="Status" value={run.status} />
+              <Summary label="Progress" value={`${run.progress}%`} />
+              {typeof run.rows_imported === 'number' && (
+                <Summary label="Rows imported" value={run.rows_imported.toLocaleString()} />
+              )}
+            </dl>
+          </div>
+
+          {run.created_tables && run.created_tables.length > 0 && (
+            <div className="card p-4">
+              <p className="text-xs font-medium text-zinc-300">Tables created</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {run.created_tables.map((t) => (
+                  <Link
+                    key={t}
+                    to={`/projects/${projectId}/data/${encodeURIComponent(t)}`}
+                    className="chip font-mono hover:border-brand-500/40 hover:text-brand-300"
+                  >
+                    <Hash className="h-3 w-3" /> {t}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </aside>
+      </div>
+    </div>
+  )
+}
+
+function Summary({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <dt className="text-zinc-500">{label}</dt>
+      <dd className="text-zinc-200">{value}</dd>
+    </div>
+  )
+}
+
+function ensureCanonicalSteps(received: PipelineStepWire[]): PipelineStepWire[] {
+  const keys: ('profile' | 'generate' | 'execute' | 'validate')[] = [
+    'profile',
+    'generate',
+    'execute',
+    'validate',
+  ]
+  const map = new Map(received.map((s) => [s.key, s] as const))
+  return keys.map(
+    (k) =>
+      map.get(k) ?? {
+        key: k,
+        title: STEP_TITLES[k] ?? k,
+        status: 'pending' as PipelineStepStatus,
+        summary: null,
+        code: null,
+        language: null,
+        attempts: 1,
+        errors: null,
+        started_at: null,
+        duration_ms: null,
+      },
+  )
+}
+
+function Stepper({ steps }: { steps: PipelineStepWire[] }) {
+  return (
+    <ol className="flex items-center">
+      {steps.map((s, i) => {
+        const isLast = i === steps.length - 1
+        return (
+          <li key={s.key} className="flex flex-1 items-center">
+            <div className="flex items-center gap-2">
+              <StepDot status={s.status} />
+              <div>
+                <p className="text-xs font-medium text-zinc-200">{s.title}</p>
+                <p className="text-[10px] text-zinc-500">
+                  {s.status === 'running'
+                    ? 'In progress…'
+                    : s.status === 'pending'
+                      ? 'Waiting'
+                      : s.status === 'success' && s.duration_ms
+                        ? formatDuration(s.duration_ms)
+                        : s.status === 'error'
+                          ? 'Errored'
+                          : s.status === 'warning'
+                            ? 'Warnings'
+                            : ''}
+                </p>
+              </div>
+            </div>
+            {!isLast && <div className="mx-3 h-px flex-1 bg-zinc-800" />}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+function StepDot({ status }: { status: PipelineStepStatus }) {
+  if (status === 'success')
+    return (
+      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+      </span>
+    )
+  if (status === 'running')
+    return (
+      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      </span>
+    )
+  if (status === 'error')
+    return (
+      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-red-500/15 text-red-300 border border-red-500/30">
+        <XCircle className="h-3.5 w-3.5" />
+      </span>
+    )
+  if (status === 'warning')
+    return (
+      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+        <AlertTriangle className="h-3.5 w-3.5" />
+      </span>
+    )
+  return (
+    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-zinc-900 text-zinc-500 border border-zinc-800">
+      <Circle className="h-3 w-3" />
+    </span>
+  )
+}
+
+function StepCard({ step, index }: { step: PipelineStepWire; index: number }) {
+  const [open, setOpen] = useState(true)
+  const hasBody = step.summary || step.code || (step.errors && step.errors.length > 0)
+  return (
+    <div
+      className={clsx(
+        'card overflow-hidden transition-colors',
+        step.status === 'error' && 'border-red-500/30',
+        step.status === 'warning' && 'border-amber-500/30',
+        step.status === 'running' && 'border-sky-500/30',
+      )}
+    >
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <StepDot status={step.status} />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500">Step {index + 1}</span>
+              <h3 className="text-sm font-medium text-zinc-100">{step.title}</h3>
+            </div>
+            {step.status === 'pending' ? (
+              <p className="mt-0.5 text-xs text-zinc-500">Hasn't started yet</p>
+            ) : (
+              <p className="mt-0.5 text-xs text-zinc-400">
+                {step.status === 'running'
+                  ? 'Running now…'
+                  : step.duration_ms
+                    ? `Took ${formatDuration(step.duration_ms)}`
+                    : ''}
+              </p>
+            )}
+          </div>
+        </div>
+        <StatusBadge status={step.status} />
+      </button>
+      {open && hasBody && (
+        <div className="space-y-3 border-t border-zinc-800 p-4">
+          {step.summary && <p className="whitespace-pre-line text-sm text-zinc-300">{step.summary}</p>}
+          {step.errors && step.errors.length > 0 && (
+            <div className="rounded-md border border-red-500/30 bg-red-500/5 p-3 text-xs">
+              <p className="mb-1 text-red-300">Error log</p>
+              <ul className="space-y-1 font-mono text-red-200/80">
+                {step.errors.map((e, i) => (
+                  <li key={i} className="whitespace-pre-wrap break-all">{e}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {step.code && (
+            <div className="overflow-hidden rounded-md border border-zinc-800 bg-zinc-950">
+              <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-1.5 text-[11px] text-zinc-500">
+                <span className="font-mono">{step.language ?? 'python'}</span>
+              </div>
+              <pre className="overflow-x-auto px-3 py-3 font-mono text-[12px] leading-relaxed text-zinc-200">
+                <code>{step.code}</code>
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+      {!open && step.status === 'pending' && (
+        <div className="border-t border-zinc-800 px-4 py-3 text-xs text-zinc-500 flex items-center gap-2">
+          <CircleDashed className="h-3.5 w-3.5" /> Waiting for previous step to finish
+        </div>
+      )}
+    </div>
+  )
+}

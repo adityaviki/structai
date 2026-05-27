@@ -1,0 +1,9 @@
+id,name,email,age,joined_at,active
+1,Alice Anderson,alice@example.com,30,2024-01-15,true
+2,Bob Brown,bob@example.com,25,2024-02-03,true
+3,Carol Chen,carol@example.com,,2024-02-19,false
+4,Dan Davis,dan@example.com,42,2024-03-11,true
+5,Eve Edwards,eve@example.com,29,2024-04-02,true
+6,Frank Foster,frank@example.com,38,2024-05-17,false
+7,Grace Garcia,grace@example.com,,2024-06-08,true
+8,Henry Hsu,henry@example.com,51,2024-07-22,true

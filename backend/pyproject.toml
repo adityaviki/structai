@@ -1,0 +1,66 @@
+[project]
+name = "structai"
+version = "0.0.1"
+description = "AI-powered structured-data import"
+requires-python = ">=3.12"
+readme = "../README.md"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "asyncpg>=0.30",
+    "psycopg[binary]>=3.2",
+    "redis>=5.2",
+    "arq>=0.26",
+    "anthropic>=0.39",
+    "polars>=1.14",
+    "python-ulid>=3.0",
+    "python-multipart>=0.0.20",
+    "sse-starlette>=2.1",
+    "structlog>=24.4",
+]
+
+[project.scripts]
+structai = "structai.cli:main"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.7",
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/structai"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "W", "N", "SIM", "TCH"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = ["asyncpg", "asyncpg.*", "arq", "arq.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
