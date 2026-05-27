@@ -14,6 +14,7 @@ from .api.errors import ApiError, api_error_handler
 from .api.healthz import router as healthz_router
 from .api.projects import router as projects_router
 from .api.runs import router as runs_router
+from .api.schema import router as schema_router
 from .api.tables import router as tables_router
 from .db.health import StartupCheckError
 from .db.health import run_all as run_startup_checks
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
     app.include_router(documents_router)
     app.include_router(runs_router)
     app.include_router(tables_router)
+    app.include_router(schema_router)
     return app
 
 

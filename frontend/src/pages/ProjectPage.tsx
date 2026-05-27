@@ -81,7 +81,7 @@ export function ProjectPage() {
             element={<ImportsTab projectId={projectId} refreshKey={importsRefresh} />}
           />
           <Route path="imports/:importId" element={<ImportDetail />} />
-          <Route path="schema" element={<SchemaTab />} />
+          <Route path="schema" element={<SchemaTab projectId={projectId} />} />
           <Route
             path="documents"
             element={<DocumentsTab projectId={projectId} onNewImport={() => setShowNewImport(true)} />}

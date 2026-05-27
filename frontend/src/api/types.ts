@@ -106,6 +106,34 @@ export interface TableSummary {
   column_count: number
 }
 
+export interface SchemaColumn {
+  name: string
+  type: string
+  nullable: boolean
+  is_pk: boolean
+  fk: FkRef | null
+}
+
+export interface SchemaTable {
+  name: string
+  columns: SchemaColumn[]
+  row_count: number
+}
+
+export interface ProjectSchema {
+  tables: SchemaTable[]
+}
+
+export interface LayoutPosition {
+  table_name: string
+  x: number
+  y: number
+}
+
+export interface ProjectLayout {
+  positions: LayoutPosition[]
+}
+
 export interface FkRef {
   table: string
   column: string

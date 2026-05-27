@@ -9,24 +9,24 @@ See [`PLAN.md`](./PLAN.md) for the full design and decision log.
 
 ## Status
 
-**Phase 4 — multi-format + multi-table.** Uploads now accept CSV, TSV,
-XLSX, and JSON. The profiler returns a list of *regions* (CSV/TSV: one;
-XLSX: one per sheet; JSON: one per array, automatically detecting
-array-of-objects / object-of-arrays / NDJSON shapes). The agent prompt
-encourages one Postgres table per region and inferring foreign keys
-where the data clearly suggests them (e.g. ``orders.customer_id`` →
-``customers.id``).
+**Phase 5 — schema diagram.** The **Schema** tab now renders an
+interactive ER diagram of the project's Postgres database:
+``information_schema``/``pg_catalog`` introspection on the backend, a
+ReactFlow canvas with a custom `TableNode` and per-column handles, and
+dagre auto-layout for first render. Drag positions are debounced-saved
+per project so the diagram stays where you put it.
 
 Earlier phase capabilities still apply:
 
-- **Phase 3:** clarifications + auto mode (agent can pause or auto-decide).
-- **Phase 2:** template-DB snapshots, fix loop (cap 5), stop/cancel,
-  undo, retention sweeper, worker restart recovery.
+- **Phase 4:** CSV / TSV / XLSX / JSON uploads, multi-region profile,
+  multi-table imports with FK inference.
+- **Phase 3:** clarifications + auto mode.
+- **Phase 2:** template-DB snapshots, fix loop, stop/cancel, undo,
+  retention sweeper, worker restart recovery.
 - **Phase 1:** profile / generate / execute / validate, live SSE
   progress, paginated data tab.
 
-Out of scope until later phases: ER diagram (Phase 5), row filters /
-sort and settings UI (Phase 6).
+Out of scope until Phase 6: row filters / sort and settings UI.
 
 ## Prerequisites
 
@@ -168,6 +168,18 @@ curl -X POST http://127.0.0.1:8000/api/runs/$RUN/undo
   foreign key on `orders.customer_id`.
 - **XLSX (multi-sheet with FK):** upload `samples/shop.xlsx` — same
   data as the JSON sample, one sheet per table.
+
+## Exercising Phase 5
+
+- After importing `samples/shop.json` (or `shop.xlsx`), open the
+  **Schema** tab. Two boxes — `customers` and `orders` — with a single
+  FK edge connecting `orders.customer_id` to `customers.id`.
+- Drag the boxes around. The positions are persisted per project; reload
+  the page and they stay where you left them.
+- API:
+  - `GET /api/projects/:id/schema` — tables + columns + PK / FK metadata.
+  - `GET /api/projects/:id/schema/layout` and
+    `POST .../schema/layout` body `{positions: [{table_name, x, y}, ...]}`.
 
 ## Layout
 

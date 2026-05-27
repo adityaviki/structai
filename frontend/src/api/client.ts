@@ -2,6 +2,9 @@ import type {
   ClarificationWire,
   DocumentWire,
   ImportRunWire,
+  LayoutPosition,
+  ProjectLayout,
+  ProjectSchema,
   ProjectWire,
   ProjectWithStats,
   RowsPage,
@@ -106,6 +109,14 @@ export const api = {
       `/api/projects/${projectId}/tables/${encodeURIComponent(name)}/rows${q}`,
     )
   },
+
+  // Schema diagram
+  getSchema: (projectId: string) =>
+    request<ProjectSchema>('GET', `/api/projects/${projectId}/schema`),
+  getLayout: (projectId: string) =>
+    request<ProjectLayout>('GET', `/api/projects/${projectId}/schema/layout`),
+  saveLayout: (projectId: string, positions: LayoutPosition[]) =>
+    request<ProjectLayout>('POST', `/api/projects/${projectId}/schema/layout`, { positions }),
 }
 
 export function runEventsUrl(runId: string): string {
