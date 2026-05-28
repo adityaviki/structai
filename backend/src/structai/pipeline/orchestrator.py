@@ -57,9 +57,25 @@ def _profile_summary(profile: DocumentProfile) -> str:
 
 
 def _snapshot_name(project_db: str, run_id: str) -> str:
-    short = run_id[:12].lower()
-    base = f"{project_db}_snap_{short}"
-    return base[:63]
+    """Build a PG-identifier-legal snapshot DB name unique to this run.
+
+    Postgres caps identifiers at 63 chars. We preserve as many ULID
+    characters as possible — at least 16, which mixes the millisecond
+    timestamp prefix with enough random entropy (~30 bits) that two runs
+    created in the same millisecond collide with vanishingly small
+    probability. (The previous 12-char prefix gave only ~10 bits of
+    random — 1/1024 collision per same-millisecond pair, which happens
+    in practice when the API enqueues two imports back-to-back.)
+    """
+
+    infix = "_snap_"
+    min_suffix = 16
+    max_project_len = 63 - len(infix) - min_suffix
+    project_part = (
+        project_db if len(project_db) <= max_project_len else project_db[:max_project_len]
+    )
+    available = 63 - len(project_part) - len(infix)
+    return f"{project_part}{infix}{run_id.lower()[:available]}"
 
 
 async def _emit_step(
