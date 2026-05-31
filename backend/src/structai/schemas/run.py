@@ -11,6 +11,7 @@ ImportStatus = Literal[
     "fixing",
     "validating",
     "needs_clarification",
+    "awaiting_schema_approval",
     "completed",
     "failed",
     "cancelling",
@@ -18,7 +19,14 @@ ImportStatus = Literal[
     "reverted",
 ]
 
-PipelineStepKey = Literal["profile", "generate", "execute", "fix", "validate"]
+PipelineStepKey = Literal[
+    "profile",
+    "propose_schema",
+    "generate",
+    "execute",
+    "fix",
+    "validate",
+]
 PipelineStepStatus = Literal["pending", "running", "success", "error", "warning"]
 
 
@@ -66,6 +74,27 @@ class PipelineStepOut(BaseModel):
     duration_ms: int | None = None
 
 
+SchemaProposalStatus = Literal["pending", "accepted", "superseded"]
+
+
+class SchemaProposalOut(BaseModel):
+    id: str
+    run_id: str
+    iteration: int
+    schema_ddl: str
+    tables: list[str]
+    rationale: str
+    status: SchemaProposalStatus
+    feedback: str | None = None
+    auto_accepted: bool = False
+    created_at: datetime
+    decided_at: datetime | None = None
+
+
+class SchemaProposalReviseIn(BaseModel):
+    feedback: str
+
+
 class ImportRunOut(BaseModel):
     id: str
     project_id: str
@@ -86,3 +115,4 @@ class ImportRunOut(BaseModel):
     reverted_by_run_id: str | None = None
     steps: list[PipelineStepOut] = []
     clarifications: list[ClarificationOut] = []
+    schema_proposals: list[SchemaProposalOut] = []

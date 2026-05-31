@@ -7,10 +7,12 @@ import {
   CheckCircle2,
   Circle,
   CircleDashed,
+  ClipboardCheck,
   Hash,
   Loader2,
   MessageCircleQuestion,
   Octagon,
+  PenLine,
   Quote,
   RotateCcw,
   Sparkles,
@@ -24,6 +26,7 @@ import type {
   ImportRunWire,
   PipelineStepStatus,
   PipelineStepWire,
+  SchemaProposalWire,
 } from '../../api/types'
 import { api, runEventsUrl } from '../../api/client'
 import { FileIcon } from '../ui/FileIcon'
@@ -38,10 +41,12 @@ const ACTIVE_STATUSES = new Set([
   'fixing',
   'validating',
   'needs_clarification',
+  'awaiting_schema_approval',
 ])
 
 const STEP_TITLES: Record<string, string> = {
   profile: 'Profile document',
+  propose_schema: 'Propose schema',
   generate: 'Generate import script',
   execute: 'Execute import script',
   fix: 'Diagnose & rewrite',
@@ -266,6 +271,27 @@ export function ImportDetail() {
         </div>
       )}
 
+      {(run.schema_proposals ?? [])
+        .filter((p) => p.status === 'pending')
+        .map((p) => (
+          <SchemaProposalCard
+            key={p.id}
+            proposal={p}
+            onDecided={(updated) => {
+              setRun((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      schema_proposals: prev.schema_proposals.map((x) =>
+                        x.id === updated.id ? updated : x,
+                      ),
+                    }
+                  : prev,
+              )
+            }}
+          />
+        ))}
+
       {(run.clarifications ?? []).filter((c) => !c.answered_at).map((c) => (
         <ClarificationCard key={c.id} clarification={c} onAnswered={(updated) => {
           setRun((prev) => prev ? {
@@ -378,7 +404,7 @@ function ensureCanonicalSteps(received: PipelineStepWire[]): PipelineStepWire[] 
   const canonical: PipelineStepWire[] = []
   const seen = new Set<string>()
 
-  for (const k of ['profile', 'generate', 'execute', 'validate'] as const) {
+  for (const k of ['profile', 'propose_schema', 'generate', 'execute', 'validate'] as const) {
     // Find all received entries with this key, sorted by attempts.
     const matches = received.filter((s) => s.key === k).sort((a, b) => a.attempts - b.attempts)
     if (matches.length === 0) {
@@ -558,6 +584,157 @@ function StepCard({ step, index }: { step: PipelineStepWire; index: number }) {
     </div>
   )
 }
+
+function SchemaProposalCard({
+  proposal: p,
+  onDecided,
+}: {
+  proposal: SchemaProposalWire
+  onDecided: (updated: SchemaProposalWire) => void
+}) {
+  const [feedback, setFeedback] = useState('')
+  const [submitting, setSubmitting] = useState<'accept' | 'revise' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [reviseOpen, setReviseOpen] = useState(false)
+
+  const accept = async () => {
+    setSubmitting('accept')
+    setError(null)
+    try {
+      const updated = await api.acceptSchemaProposal(p.run_id, p.id)
+      onDecided(updated)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setSubmitting(null)
+    }
+  }
+
+  const revise = async () => {
+    if (!feedback.trim()) return
+    setSubmitting('revise')
+    setError(null)
+    try {
+      const updated = await api.reviseSchemaProposal(p.run_id, p.id, feedback.trim())
+      onDecided(updated)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setSubmitting(null)
+    }
+  }
+
+  return (
+    <div className="card border-amber-500/30 bg-amber-500/5 p-4">
+      <div className="flex items-start gap-3">
+        <span className="rounded-full border border-amber-500/30 bg-amber-500/15 p-1.5 text-amber-300">
+          <ClipboardCheck className="h-4 w-4" />
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-amber-100">
+              Review the proposed schema
+            </p>
+            {p.iteration > 1 && (
+              <span className="rounded-full border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                Revision #{p.iteration}
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-amber-200/80">
+            The agent will not generate the import script until you accept this schema (or ask for changes).
+          </p>
+
+          {p.tables.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {p.tables.map((t) => (
+                <span
+                  key={t}
+                  className="inline-flex items-center gap-1 rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] font-mono text-zinc-200"
+                >
+                  <Hash className="h-3 w-3" />
+                  {t}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <p className="mt-3 whitespace-pre-line text-sm text-zinc-200">{p.rationale}</p>
+
+          <div className="mt-3 overflow-hidden rounded-md border border-zinc-800 bg-zinc-950">
+            <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-1.5 text-[11px] text-zinc-500">
+              <span className="font-mono">sql</span>
+            </div>
+            <pre className="overflow-x-auto px-3 py-3 font-mono text-[12px] leading-relaxed text-zinc-200">
+              <code>{p.schema_ddl}</code>
+            </pre>
+          </div>
+
+          {reviseOpen && (
+            <div className="mt-3">
+              <label className="text-xs text-zinc-400">
+                Describe the changes you want (the agent will revise the schema):
+              </label>
+              <textarea
+                className="input mt-1"
+                rows={3}
+                placeholder="e.g. split address into its own addresses table; make customer.email the primary key…"
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+              />
+            </div>
+          )}
+
+          {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
+
+          <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+            {!reviseOpen && (
+              <button
+                className="btn-secondary"
+                onClick={() => setReviseOpen(true)}
+                disabled={submitting !== null}
+              >
+                <PenLine className="h-3.5 w-3.5" />
+                Request changes
+              </button>
+            )}
+            {reviseOpen && (
+              <>
+                <button
+                  className="btn-ghost"
+                  onClick={() => {
+                    setReviseOpen(false)
+                    setFeedback('')
+                  }}
+                  disabled={submitting !== null}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn-secondary"
+                  onClick={() => void revise()}
+                  disabled={submitting !== null || !feedback.trim()}
+                >
+                  <PenLine className="h-3.5 w-3.5" />
+                  {submitting === 'revise' ? 'Asking the agent…' : 'Submit changes'}
+                </button>
+              </>
+            )}
+            <button
+              className="btn-primary"
+              onClick={() => void accept()}
+              disabled={submitting !== null}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {submitting === 'accept' ? 'Accepting…' : 'Accept schema'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 
 function ClarificationCard({
   clarification: c,

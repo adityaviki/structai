@@ -6,6 +6,7 @@ export type ImportStatus =
   | 'fixing'
   | 'validating'
   | 'needs_clarification'
+  | 'awaiting_schema_approval'
   | 'completed'
   | 'failed'
   | 'cancelling'
@@ -16,6 +17,7 @@ export type DocumentStatus = 'uploaded' | 'importing' | 'imported' | 'failed' | 
 
 export type PipelineStepKey =
   | 'profile'
+  | 'propose_schema'
   | 'generate'
   | 'execute'
   | 'validate'

@@ -1,7 +1,9 @@
-"""Stage 2: ask the LLM for a schema DDL + runnable import.py.
+"""Stage 2b: ask the LLM for a runnable import.py against a locked schema.
 
 Uses an agentic loop so the model can call `ask_clarification` mid-stream
-when it needs a judgment call from the user.
+when it needs a judgment call from the user. The schema is fixed at this
+point (already approved by the user in the propose-schema stage); the
+model's job is to produce the data-loading script that targets it.
 """
 
 from __future__ import annotations
@@ -34,7 +36,8 @@ class GenerateResult:
 async def generate_import(
     *,
     profile: DocumentProfile,
-    existing_tables: list[str],
+    approved_schema_ddl: str,
+    approved_tables: list[str],
     instructions: str | None,
     on_clarification: ClarificationHandler | None = None,
     model: str | None = None,
@@ -42,14 +45,14 @@ async def generate_import(
     profile_json = json.dumps(profile.to_dict(), indent=2)
     user_text = render_generate_user_message(
         profile_json=profile_json,
-        existing_tables=existing_tables,
+        approved_schema_ddl=approved_schema_ddl,
+        approved_tables=approved_tables,
         instructions=instructions,
     )
 
     async def _handle_tool_call(name: str, inputs: dict[str, Any]) -> str:
         if name == "ask_clarification":
             if on_clarification is None:
-                # No suspend mechanism wired up — refuse so the model proceeds.
                 return (
                     "Clarification mechanism not available in this run; "
                     "pick the most reasonable option yourself and proceed."

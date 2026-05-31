@@ -24,9 +24,10 @@ from typing import Any
 
 from ..agent import events
 from ..agent.decide import auto_decide
-from ..db import clarifications_repo, runs_repo
+from ..db import clarifications_repo, runs_repo, schema_proposals_repo
 from ..db.ids import new_id
 from ..db.pool import with_database
+from ..db.schema_intro import format_for_llm, introspect_project
 from ..db.snapshots import create_snapshot, drop_snapshot, restore_from_snapshot
 from ..logging import log
 from ..settings import get_settings
@@ -35,6 +36,11 @@ from .execute import ExecuteResult, execute_script
 from .fix import fix_import
 from .generate import generate_import
 from .profile import DocumentProfile, profile_document
+from .propose_schema import (
+    SchemaProposal,
+    propose_schema_step,
+    revise_schema_step,
+)
 from .validate import validate_project
 
 MAX_FIX_ATTEMPTS = 5
@@ -248,6 +254,153 @@ def _make_clarification_handler(
     return handler
 
 
+def _proposal_summary(proposal: SchemaProposal) -> str:
+    table_list = ", ".join(f"`{t}`" for t in proposal.tables) or "(no tables)"
+    return f"{table_list}\n\n{proposal.rationale.strip()}"
+
+
+async def _run_schema_approval_loop(
+    *,
+    run_id: str,
+    profile: DocumentProfile,
+    existing_schema: str,
+    instructions: str | None,
+    auto_mode: bool,
+    model_override: str | None,
+) -> tuple[str, list[str]]:
+    """Drive the propose/accept/revise loop until a proposal is accepted.
+
+    Returns the accepted ``(schema_ddl, tables)``. Suspends the run with
+    ``awaiting_schema_approval`` status between iterations when not in
+    auto mode. In auto mode, accepts the first proposal immediately.
+    """
+
+    iteration = 1
+    previous_iterations: list[dict[str, str]] = []
+    iteration_started: datetime = _now()
+
+    while True:
+        await _check_cancel(run_id)
+        if iteration == 1:
+            await _set_status(run_id, "generating", progress=15)
+            await _emit_step(
+                run_id,
+                step_key="propose_schema",
+                status="running",
+                title="Propose schema",
+                started_at=iteration_started,
+                attempts=iteration,
+            )
+            schema_clarify = _make_clarification_handler(
+                run_id=run_id,
+                auto_mode=auto_mode,
+                resume_status="generating",
+                resume_progress=15,
+            )
+            proposal = await propose_schema_step(
+                profile=profile,
+                existing_schema=existing_schema,
+                instructions=instructions,
+                on_clarification=schema_clarify,
+                model=model_override,
+            )
+        else:
+            await _set_status(run_id, "generating", progress=20)
+            await _emit_step(
+                run_id,
+                step_key="propose_schema",
+                status="running",
+                title=f"Revise schema (iteration {iteration})",
+                started_at=iteration_started,
+                attempts=iteration,
+            )
+            schema_clarify = _make_clarification_handler(
+                run_id=run_id,
+                auto_mode=auto_mode,
+                resume_status="generating",
+                resume_progress=20,
+            )
+            proposal = await revise_schema_step(
+                profile=profile,
+                existing_schema=existing_schema,
+                instructions=instructions,
+                previous_iterations=previous_iterations,
+                feedback=previous_iterations[-1]["feedback"],
+                on_clarification=schema_clarify,
+                model=model_override,
+            )
+
+        proposal_id = new_id()
+        await schema_proposals_repo.create_proposal(
+            proposal_id=proposal_id,
+            run_id=run_id,
+            iteration=iteration,
+            schema_ddl=proposal.schema_ddl,
+            tables=proposal.tables,
+            rationale=proposal.rationale,
+        )
+        await _emit_step(
+            run_id,
+            step_key="propose_schema",
+            status="success" if auto_mode else "warning",
+            title=(
+                "Propose schema"
+                if iteration == 1
+                else f"Revise schema (iteration {iteration})"
+            ),
+            summary=_proposal_summary(proposal),
+            code=proposal.schema_ddl,
+            language="sql",
+            started_at=iteration_started,
+            duration_ms=int((_now() - iteration_started).total_seconds() * 1000),
+            attempts=iteration,
+        )
+        await events.publish(
+            run_id,
+            {
+                "type": "schema_proposal",
+                "proposal_id": proposal_id,
+                "iteration": iteration,
+            },
+        )
+
+        if auto_mode:
+            await schema_proposals_repo.accept(proposal_id=proposal_id, auto=True)
+            await events.publish(
+                run_id,
+                {"type": "schema_proposal_decided", "proposal_id": proposal_id, "auto": True},
+            )
+            return proposal.schema_ddl, proposal.tables
+
+        # Manual mode: suspend until user accepts or asks to revise.
+        await _set_status(run_id, "awaiting_schema_approval")
+        while True:
+            await _check_cancel(run_id)
+            if await schema_proposals_repo.is_decided(proposal_id):
+                break
+            await asyncio.sleep(1)
+
+        rec = await schema_proposals_repo.get_proposal(proposal_id)
+        assert rec is not None
+        if rec["status"] == "accepted":
+            await events.publish(
+                run_id,
+                {"type": "schema_proposal_decided", "proposal_id": proposal_id, "auto": False},
+            )
+            return proposal.schema_ddl, proposal.tables
+
+        # Superseded → push this iteration onto the history and loop.
+        previous_iterations.append(
+            {
+                "schema_ddl": proposal.schema_ddl,
+                "rationale": proposal.rationale,
+                "feedback": rec["feedback"] or "",
+            }
+        )
+        iteration += 1
+        iteration_started = _now()
+
+
 async def _cancel_watchdog(run_id: str, cancel_event: asyncio.Event) -> None:
     """Background task: polls the DB and sets the event if cancel is requested.
 
@@ -306,20 +459,36 @@ async def run_import(run_id: str) -> None:
             duration_ms=int((_now() - started).total_seconds() * 1000),
         )
 
+        # --- propose schema ---
+        await _check_cancel(run_id)
+        auto_mode = bool(record["auto_mode"])
+        existing = await introspect_project(project_db)
+        existing_schema = format_for_llm(existing)
+
+        approved_schema_ddl, approved_tables = await _run_schema_approval_loop(
+            run_id=run_id,
+            profile=profile,
+            existing_schema=existing_schema,
+            instructions=instructions,
+            auto_mode=auto_mode,
+            model_override=model_override,
+        )
+
         # --- generate (attempt 1) ---
         await _check_cancel(run_id)
         await _set_status(run_id, "generating", progress=25)
         started = _now()
-        auto_mode = bool(record["auto_mode"])
         gen_clarify = _make_clarification_handler(
             run_id=run_id,
             auto_mode=auto_mode,
             resume_status="generating",
             resume_progress=25,
         )
+
         gen = await generate_import(
             profile=profile,
-            existing_tables=[],
+            approved_schema_ddl=approved_schema_ddl,
+            approved_tables=approved_tables,
             instructions=instructions,
             on_clarification=gen_clarify,
             model=model_override,
@@ -421,6 +590,7 @@ async def run_import(run_id: str) -> None:
             )
             current = await fix_import(
                 profile=profile,
+                approved_schema_ddl=approved_schema_ddl,
                 previous_script=current.import_script,
                 stderr_tail=err_tail,
                 attempt_number=attempt,

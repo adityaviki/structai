@@ -31,6 +31,11 @@ const config: Record<
     tone: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
     Icon: CircleHelp,
   },
+  awaiting_schema_approval: {
+    label: 'Review schema',
+    tone: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
+    Icon: CircleHelp,
+  },
   completed: { label: 'Imported', tone: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30', Icon: CheckCircle2 },
   failed: { label: 'Failed', tone: 'text-red-300 bg-red-500/10 border-red-500/30', Icon: XCircle },
   cancelling: { label: 'Stopping…', tone: 'text-zinc-300 bg-zinc-800/60 border-zinc-700/60', Icon: Loader2, spin: true },

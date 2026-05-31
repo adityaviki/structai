@@ -8,6 +8,7 @@ import type {
   ProjectWire,
   ProjectWithStats,
   RowsPage,
+  SchemaProposalWire,
   SettingsPatch,
   SettingsWire,
   SnapshotWire,
@@ -99,6 +100,17 @@ export const api = {
       'POST',
       `/api/runs/${runId}/clarifications/${clarId}/answer`,
       body,
+    ),
+  acceptSchemaProposal: (runId: string, proposalId: string) =>
+    request<SchemaProposalWire>(
+      'POST',
+      `/api/runs/${runId}/schema-proposals/${proposalId}/accept`,
+    ),
+  reviseSchemaProposal: (runId: string, proposalId: string, feedback: string) =>
+    request<SchemaProposalWire>(
+      'POST',
+      `/api/runs/${runId}/schema-proposals/${proposalId}/revise`,
+      { feedback },
     ),
 
   // Tables

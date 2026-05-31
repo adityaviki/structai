@@ -10,13 +10,20 @@ export type ImportStatus =
   | 'fixing'
   | 'validating'
   | 'needs_clarification'
+  | 'awaiting_schema_approval'
   | 'completed'
   | 'failed'
   | 'cancelling'
   | 'cancelled'
   | 'reverted'
 
-export type PipelineStepKey = 'profile' | 'generate' | 'execute' | 'fix' | 'validate'
+export type PipelineStepKey =
+  | 'profile'
+  | 'propose_schema'
+  | 'generate'
+  | 'execute'
+  | 'fix'
+  | 'validate'
 export type PipelineStepStatus = 'pending' | 'running' | 'success' | 'error' | 'warning'
 
 export interface PipelineStepWire {
@@ -52,6 +59,22 @@ export interface ClarificationWire {
   answered_at: string | null
 }
 
+export type SchemaProposalStatus = 'pending' | 'accepted' | 'superseded'
+
+export interface SchemaProposalWire {
+  id: string
+  run_id: string
+  iteration: number
+  schema_ddl: string
+  tables: string[]
+  rationale: string
+  status: SchemaProposalStatus
+  feedback: string | null
+  auto_accepted: boolean
+  created_at: string
+  decided_at: string | null
+}
+
 export interface ImportRunWire {
   id: string
   project_id: string
@@ -72,6 +95,7 @@ export interface ImportRunWire {
   reverted_by_run_id: string | null
   steps: PipelineStepWire[]
   clarifications: ClarificationWire[]
+  schema_proposals: SchemaProposalWire[]
 }
 
 export interface ProjectWire {

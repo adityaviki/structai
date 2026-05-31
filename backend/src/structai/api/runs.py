@@ -15,7 +15,7 @@ from fastapi import APIRouter, Request
 from sse_starlette.sse import EventSourceResponse
 
 from ..agent.events import channel, publish
-from ..db import clarifications_repo, runs_repo
+from ..db import clarifications_repo, runs_repo, schema_proposals_repo
 from ..db.ids import new_id
 from ..db.pools import get_pools
 from ..db.snapshots import drop_snapshot, restore_from_snapshot
@@ -27,6 +27,8 @@ from ..schemas.run import (
     ImportRunIn,
     ImportRunOut,
     PipelineStepOut,
+    SchemaProposalOut,
+    SchemaProposalReviseIn,
 )
 from ..settings import get_settings
 from .errors import ApiError
@@ -58,6 +60,22 @@ def _step_record_to_out(row: asyncpg.Record) -> PipelineStepOut:
     )
 
 
+def _proposal_record_to_out(row: asyncpg.Record) -> SchemaProposalOut:
+    return SchemaProposalOut(
+        id=row["id"],
+        run_id=row["run_id"],
+        iteration=row["iteration"],
+        schema_ddl=row["schema_ddl"],
+        tables=list(row["tables"]) if row["tables"] is not None else [],
+        rationale=row["rationale"],
+        status=row["status"],
+        feedback=row["feedback"],
+        auto_accepted=row["auto_accepted"],
+        created_at=row["created_at"],
+        decided_at=row["decided_at"],
+    )
+
+
 def _clar_record_to_out(row: asyncpg.Record) -> ClarificationOut:
     raw_options = row["options"]
     if isinstance(raw_options, str):
@@ -84,6 +102,7 @@ async def _row_to_out(row: asyncpg.Record, steps: list[asyncpg.Record]) -> Impor
         and row["snapshot_db"] is not None
     )
     clar_rows = await clarifications_repo.list_for_run(row["id"])
+    proposal_rows = await schema_proposals_repo.list_for_run(row["id"])
     return ImportRunOut(
         id=row["id"],
         project_id=row["project_id"],
@@ -104,6 +123,7 @@ async def _row_to_out(row: asyncpg.Record, steps: list[asyncpg.Record]) -> Impor
         reverted_by_run_id=row["reverted_by_run_id"],
         steps=[_step_record_to_out(s) for s in steps],
         clarifications=[_clar_record_to_out(c) for c in clar_rows],
+        schema_proposals=[_proposal_record_to_out(p) for p in proposal_rows],
     )
 
 
@@ -422,6 +442,95 @@ async def answer_clarification(
     refreshed = await clarifications_repo.get_clarification(clar_id)
     assert refreshed is not None
     return _clar_record_to_out(refreshed)
+
+
+@router.get("/runs/{run_id}/schema-proposals", response_model=list[SchemaProposalOut])
+async def list_schema_proposals(run_id: str) -> list[SchemaProposalOut]:
+    run = await runs_repo.get_run(run_id)
+    if run is None:
+        raise ApiError(status=404, title="Not found", detail=f"Run {run_id!r} not found.")
+    rows = await schema_proposals_repo.list_for_run(run_id)
+    return [_proposal_record_to_out(r) for r in rows]
+
+
+@router.post(
+    "/runs/{run_id}/schema-proposals/{proposal_id}/accept",
+    response_model=SchemaProposalOut,
+)
+async def accept_schema_proposal(run_id: str, proposal_id: str) -> SchemaProposalOut:
+    prop = await schema_proposals_repo.get_proposal(proposal_id)
+    if prop is None or prop["run_id"] != run_id:
+        raise ApiError(
+            status=404,
+            title="Not found",
+            detail=f"Schema proposal {proposal_id!r} not found on run {run_id!r}.",
+        )
+    if prop["status"] != "pending":
+        raise ApiError(
+            status=409,
+            title="Already decided",
+            detail=f"This proposal is already {prop['status']}.",
+        )
+
+    updated = await schema_proposals_repo.accept(proposal_id=proposal_id, auto=False)
+    if not updated:
+        raise ApiError(status=409, title="Already decided", detail="Proposal was decided by another request.")
+
+    await publish(
+        run_id,
+        {"type": "schema_proposal_decided", "proposal_id": proposal_id, "auto": False},
+    )
+
+    refreshed = await schema_proposals_repo.get_proposal(proposal_id)
+    assert refreshed is not None
+    return _proposal_record_to_out(refreshed)
+
+
+@router.post(
+    "/runs/{run_id}/schema-proposals/{proposal_id}/revise",
+    response_model=SchemaProposalOut,
+)
+async def revise_schema_proposal(
+    run_id: str,
+    proposal_id: str,
+    body: SchemaProposalReviseIn,
+) -> SchemaProposalOut:
+    if not body.feedback.strip():
+        raise ApiError(
+            status=400,
+            title="Bad request",
+            detail="Feedback is required to request a revision.",
+        )
+
+    prop = await schema_proposals_repo.get_proposal(proposal_id)
+    if prop is None or prop["run_id"] != run_id:
+        raise ApiError(
+            status=404,
+            title="Not found",
+            detail=f"Schema proposal {proposal_id!r} not found on run {run_id!r}.",
+        )
+    if prop["status"] != "pending":
+        raise ApiError(
+            status=409,
+            title="Already decided",
+            detail=f"This proposal is already {prop['status']}.",
+        )
+
+    updated = await schema_proposals_repo.supersede_with_feedback(
+        proposal_id=proposal_id,
+        feedback=body.feedback.strip(),
+    )
+    if not updated:
+        raise ApiError(status=409, title="Already decided", detail="Proposal was decided by another request.")
+
+    await publish(
+        run_id,
+        {"type": "schema_proposal_decided", "proposal_id": proposal_id, "auto": False, "revise": True},
+    )
+
+    refreshed = await schema_proposals_repo.get_proposal(proposal_id)
+    assert refreshed is not None
+    return _proposal_record_to_out(refreshed)
 
 
 @router.post("/runs/{run_id}/cancel", status_code=202)

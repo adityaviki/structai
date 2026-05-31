@@ -28,6 +28,7 @@ ClarificationHandler = Callable[[str, str | None, list[dict[str, Any]]], Awaitab
 async def fix_import(
     *,
     profile: DocumentProfile,
+    approved_schema_ddl: str,
     previous_script: str,
     stderr_tail: str,
     attempt_number: int,
@@ -38,6 +39,7 @@ async def fix_import(
     profile_json = json.dumps(profile.to_dict(), indent=2)
     user_text = render_fix_user_message(
         profile_json=profile_json,
+        approved_schema_ddl=approved_schema_ddl,
         previous_script=previous_script,
         stderr_tail=stderr_tail,
         attempt_number=attempt_number,
