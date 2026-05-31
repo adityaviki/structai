@@ -19,7 +19,10 @@ echo "==> uv sync (backend deps)"
 ( cd backend && uv sync --no-dev )
 
 echo "==> pnpm install (frontend deps)"
-( cd frontend && pnpm install --frozen-lockfile )
+# pnpm 11 exits non-zero on the harmless "ignored build scripts" warning
+# (esbuild postinstall). Tolerate it; the subsequent vite build fails
+# loudly if the install actually broke.
+( cd frontend && pnpm install --frozen-lockfile ) || true
 
 echo "==> migrate"
 ( cd backend && env $(grep -v '^#' "$ENV_FILE" | xargs) uv run structai migrate )
