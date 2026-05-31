@@ -21,7 +21,8 @@ __pycache__/
 .mypy_cache/
 *.egg-info/
 
-# Workspace data
-workspace/
+# Runtime workspace data (uploads, run logs) — repo-root only, NOT the
+# backend/src/structai/workspace/ source package.
+/workspace/
 
 .misc
