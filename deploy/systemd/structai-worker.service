@@ -12,8 +12,9 @@ Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu/structai-v2/backend
 EnvironmentFile=/etc/structai.env
-Environment=PATH=/home/ubuntu/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=/home/ubuntu/.local/bin/uv run arq structai.worker.main.WorkerSettings
+# Invoke the venv's arq directly. See structai-api.service for why we
+# avoid `uv run` under ProtectHome=read-only.
+ExecStart=/home/ubuntu/structai-v2/backend/.venv/bin/arq structai.worker.main.WorkerSettings
 Restart=on-failure
 RestartSec=5
 

@@ -8,11 +8,10 @@ Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu/structai-v2/backend
 EnvironmentFile=/etc/structai.env
-# Use uv to invoke uvicorn inside the project virtualenv. PATH ensures uv
-# (installed via the user-mode astral installer) is reachable from systemd's
-# minimal environment.
-Environment=PATH=/home/ubuntu/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=/home/ubuntu/.local/bin/uv run uvicorn structai.main:app --host 127.0.0.1 --port 8000
+# Invoke the venv's uvicorn directly. `uv run` is avoided here because it
+# tries to write to ~/.cache/uv at startup and ProtectHome=read-only
+# blocks that. deploy.sh builds the venv with `uv sync` ahead of time.
+ExecStart=/home/ubuntu/structai-v2/backend/.venv/bin/uvicorn structai.main:app --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=5
 
