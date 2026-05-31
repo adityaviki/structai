@@ -1,0 +1,42 @@
+# Append this block to /etc/caddy/Caddyfile alongside the existing
+# movies.adityaviki.com site. Caddy serves multiple sites from one file.
+#
+# Auto-HTTPS via Let's Encrypt. Caddy renews on its own.
+# Serves the Vite-built frontend statically and reverse-proxies /api/*.
+
+structai.adityaviki.com {
+	encode zstd gzip
+
+	# Backend (uvicorn on 127.0.0.1:8000). All API + SSE traffic goes here.
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8000 {
+			# SSE streams: don't buffer, no idle timeout for run-events.
+			flush_interval -1
+			transport http {
+				read_timeout 1h
+			}
+		}
+	}
+
+	# Everything else: the built frontend with SPA fallback.
+	handle {
+		root * /home/ubuntu/structai-v2/frontend/dist
+		try_files {path} /index.html
+		file_server
+	}
+
+	# Big multipart uploads (xlsx documents). Bump as needed.
+	request_body {
+		max_size 50MB
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		# Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+
+	log {
+		output file /var/log/caddy/structai.adityaviki.com.log
+	}
+}
