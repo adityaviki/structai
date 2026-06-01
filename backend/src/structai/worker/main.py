@@ -56,3 +56,11 @@ class WorkerSettings:
     on_shutdown = shutdown
     max_jobs = 1  # D9: one import at a time
     redis_settings = _redis_settings()
+    # The orchestrator suspends on Postgres polls while waiting for the
+    # user to answer a clarification or accept a schema proposal. arq's
+    # default 5-minute job_timeout cancels the job underneath us in that
+    # state, leaving the run pinned in awaiting_* with nobody polling.
+    # 8 hours covers realistic human-in-the-loop latency; the polling
+    # loop's own cancel/wait-cap (orchestrator._run_schema_approval_loop
+    # and _make_clarification_handler) handles genuinely abandoned runs.
+    job_timeout = 8 * 3600

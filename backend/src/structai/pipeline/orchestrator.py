@@ -45,6 +45,17 @@ from .validate import validate_project
 
 MAX_FIX_ATTEMPTS = 5
 
+# How long the orchestrator will wait for a human response (clarification
+# answer or schema-proposal decision) before giving up on the run. Set
+# lower than the arq job_timeout (see worker.main.WorkerSettings) so the
+# orchestrator owns the failure, not arq — that way we can mark the run
+# failed with a clean error message instead of leaving it pinned.
+HUMAN_WAIT_TIMEOUT_S = 4 * 3600
+
+
+class _HumanWaitTimeoutError(Exception):
+    """Raised by the polling loops when the user takes too long."""
+
 
 def _now() -> datetime:
     return datetime.now(UTC)
@@ -231,10 +242,16 @@ def _make_clarification_handler(
 
         # Manual mode: suspend, poll DB until answered or cancelled.
         await _set_status(run_id, "needs_clarification")
+        wait_started = _now()
         while True:
             await _check_cancel(run_id)
             if await clarifications_repo.is_answered(clar_id):
                 break
+            if (_now() - wait_started).total_seconds() > HUMAN_WAIT_TIMEOUT_S:
+                raise _HumanWaitTimeoutError(
+                    f"No answer received within {HUMAN_WAIT_TIMEOUT_S // 3600}h "
+                    f"of asking the clarification."
+                )
             await asyncio.sleep(1)
 
         rec = await clarifications_repo.get_clarification(clar_id)
@@ -378,10 +395,16 @@ async def _run_schema_approval_loop(
 
         # Manual mode: suspend until user accepts or asks to revise.
         await _set_status(run_id, "awaiting_schema_approval")
+        wait_started = _now()
         while True:
             await _check_cancel(run_id)
             if await schema_proposals_repo.is_decided(proposal_id):
                 break
+            if (_now() - wait_started).total_seconds() > HUMAN_WAIT_TIMEOUT_S:
+                raise _HumanWaitTimeoutError(
+                    f"No decision on the proposed schema within "
+                    f"{HUMAN_WAIT_TIMEOUT_S // 3600}h."
+                )
             await asyncio.sleep(1)
 
         rec = await schema_proposals_repo.get_proposal(proposal_id)
@@ -685,6 +708,20 @@ async def run_import(run_id: str) -> None:
         )
         await events.publish(run_id, {"type": "cancelled"})
         log.info("orchestrator.cancelled", run_id=run_id)
+
+    except _HumanWaitTimeoutError as exc:
+        if snapshot_taken:
+            with contextlib.suppress(Exception):
+                await drop_snapshot(settings=settings, snapshot_db=snapshot_db)
+        await _set_status(
+            run_id,
+            "failed",
+            error_message=str(exc),
+            finished_at=_now(),
+            clear_snapshot=True,
+        )
+        await events.publish(run_id, {"type": "failed"})
+        log.info("orchestrator.human_wait_timeout", run_id=run_id)
 
     except Exception as exc:  # noqa: BLE001
         if snapshot_taken:

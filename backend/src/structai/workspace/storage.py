@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ..settings import get_settings
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+    from pathlib import Path
 
 
 def workspace_root() -> Path:
