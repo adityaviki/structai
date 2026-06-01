@@ -65,13 +65,17 @@ def _profile_summary(profile: DocumentProfile) -> str:
 def _snapshot_name(project_db: str, run_id: str) -> str:
     """Build a PG-identifier-legal snapshot DB name unique to this run.
 
-    Postgres caps identifiers at 63 chars. We preserve as many ULID
-    characters as possible — at least 16, which mixes the millisecond
-    timestamp prefix with enough random entropy (~30 bits) that two runs
-    created in the same millisecond collide with vanishingly small
-    probability. (The previous 12-char prefix gave only ~10 bits of
-    random — 1/1024 collision per same-millisecond pair, which happens
-    in practice when the API enqueues two imports back-to-back.)
+    Postgres caps identifiers at 63 chars. python-ulid generates
+    monotonic ULIDs: same-millisecond IDs share the first 10 (timestamp)
+    AND most of the next 16 (random) characters, differing only in the
+    LAST few chars where the monotonic counter increments. So we keep
+    the TAIL of the ULID, not the head — that's where the entropy
+    actually lives within a millisecond.
+
+    We reserve at least 16 chars for the ULID tail (`min_suffix`), which
+    in monotonic mode keeps the full random block plus part of the
+    timestamp — uniqueness is effectively guaranteed for any realistic
+    enqueue rate.
     """
 
     infix = "_snap_"
@@ -81,7 +85,7 @@ def _snapshot_name(project_db: str, run_id: str) -> str:
         project_db if len(project_db) <= max_project_len else project_db[:max_project_len]
     )
     available = 63 - len(project_part) - len(infix)
-    return f"{project_part}{infix}{run_id.lower()[:available]}"
+    return f"{project_part}{infix}{run_id.lower()[-available:]}"
 
 
 async def _emit_step(
