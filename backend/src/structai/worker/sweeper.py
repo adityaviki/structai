@@ -24,6 +24,7 @@ ACTIVE_STATUSES = (
     "validating",
     "cancelling",
     "needs_clarification",
+    "awaiting_schema_approval",
 )
 
 
