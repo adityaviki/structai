@@ -133,6 +133,48 @@ Let's Encrypt on first request, and you're live.
 
 ## Updating after a code push
 
+### Automatic (GitHub Actions)
+
+`.github/workflows/deploy.yml` deploys on every push to `main` — it SSHes
+onto the box and runs `deploy/deploy.sh`. Doc-only / `.md` / workflow-only
+pushes are skipped (nothing to ship), and you can trigger a deploy by hand
+from the repo's **Actions → Deploy → Run workflow** button.
+
+One-time setup — add these repository secrets
+(**Settings → Secrets and variables → Actions → New repository secret**):
+
+| Secret           | Value                                                            |
+| ---------------- | ---------------------------------------------------------------- |
+| `DEPLOY_HOST`    | Lightsail public IP (or `structai.adityaviki.com`)               |
+| `DEPLOY_USER`    | `ubuntu`                                                         |
+| `DEPLOY_SSH_KEY` | a **private** SSH key whose public half is in the box's `~ubuntu/.ssh/authorized_keys` |
+| `DEPLOY_PORT`    | `22` (or your SSH port)                                          |
+
+Generate a dedicated deploy key (don't reuse a personal key):
+
+```bash
+# on your laptop
+ssh-keygen -t ed25519 -f structai-deploy -C "github-actions-deploy" -N ""
+# install the PUBLIC half on the box
+ssh-copy-id -i structai-deploy.pub ubuntu@<lightsail-ip>
+# paste the PRIVATE half (contents of ./structai-deploy) into the DEPLOY_SSH_KEY secret
+```
+
+Or set all four with the `gh` CLI:
+
+```bash
+gh secret set DEPLOY_HOST    --body '<lightsail-ip>'
+gh secret set DEPLOY_USER    --body 'ubuntu'
+gh secret set DEPLOY_PORT    --body '22'
+gh secret set DEPLOY_SSH_KEY < structai-deploy
+```
+
+Watch a run: **Actions** tab, or `gh run watch`. The deploy is wrapped in a
+`concurrency` group so two pushes can't deploy at once — the second queues
+behind the first.
+
+### Manual
+
 ```bash
 cd /home/ubuntu/structai-v2
 bash deploy/deploy.sh
