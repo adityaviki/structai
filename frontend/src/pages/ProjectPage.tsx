@@ -12,6 +12,7 @@ import { useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import clsx from 'clsx'
 import { Logo } from '../components/ui/Logo'
+import { ThemeToggle } from '../components/ui/ThemeToggle'
 import { DataTab } from '../components/tabs/DataTab'
 import { ImportsTab } from '../components/tabs/ImportsTab'
 import { ImportDetail } from '../components/tabs/ImportDetail'
@@ -73,6 +74,7 @@ export function ProjectPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <button
               onClick={() => setShowDelete(true)}
               className="btn-ghost text-rose-300/80 hover:bg-rose-500/10 hover:text-rose-200"

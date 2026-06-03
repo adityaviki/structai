@@ -213,7 +213,7 @@ export function NewImportModal({
                   <span
                     className={clsx(
                       'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-                      isSelected ? 'border-brand-500 bg-brand-500 text-zinc-950' : 'border-zinc-700 bg-zinc-900',
+                      isSelected ? 'border-brand-500 bg-brand-500 text-ink' : 'border-zinc-700 bg-zinc-900',
                     )}
                   >
                     {isSelected && <Check className="h-3 w-3" />}

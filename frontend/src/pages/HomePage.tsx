@@ -11,6 +11,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { Logo } from '../components/ui/Logo'
+import { ThemeToggle } from '../components/ui/ThemeToggle'
 import { Modal } from '../components/ui/Modal'
 import { api } from '../api/client'
 import { useAsync } from '../api/hooks'
@@ -58,6 +59,7 @@ export function HomePage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <Logo />
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <Link to="/settings" className="btn-ghost" title="Settings">
               <SettingsIcon className="h-4 w-4" />
             </Link>

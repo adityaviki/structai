@@ -221,7 +221,7 @@ export function AIChangesPanel({ onClose }: { onClose: () => void }) {
     <aside className="card flex w-[420px] shrink-0 flex-col overflow-hidden">
       <div className="flex items-center justify-between gap-2 border-b border-zinc-800 p-3">
         <div className="flex items-center gap-2">
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-brand-400 to-emerald-700 text-zinc-950 shadow-[0_0_18px_-4px_rgba(16,185,129,0.5)]">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-brand-400 to-emerald-700 text-ink shadow-[0_0_18px_-4px_rgba(16,185,129,0.5)]">
             <Sparkles className="h-3.5 w-3.5" />
           </span>
           <div>
@@ -294,7 +294,7 @@ export function AIChangesPanel({ onClose }: { onClose: () => void }) {
           />
           <button
             type="submit"
-            className="absolute bottom-2 right-2 inline-flex h-7 w-7 items-center justify-center rounded-md bg-brand-500 text-zinc-950 transition-colors hover:bg-brand-400 disabled:opacity-40"
+            className="absolute bottom-2 right-2 inline-flex h-7 w-7 items-center justify-center rounded-md bg-brand-500 text-ink transition-colors hover:bg-brand-400 disabled:opacity-40"
             disabled={!input.trim() || pending}
             aria-label="Send"
           >
@@ -358,7 +358,7 @@ function UserBubble({ msg }: { msg: Extract<ChatMessage, { role: 'user' }> }) {
 function ThinkingBubble() {
   return (
     <div className="flex items-start gap-2">
-      <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-emerald-700 text-zinc-950">
+      <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-emerald-700 text-ink">
         <Sparkles className="h-3 w-3" />
       </span>
       <div className="rounded-2xl rounded-tl-sm border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-sm text-zinc-400">
@@ -383,7 +383,7 @@ function AgentBubble({
 }) {
   return (
     <div className="flex items-start gap-2">
-      <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-emerald-700 text-zinc-950">
+      <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-emerald-700 text-ink">
         <Bot className="h-3 w-3" />
       </span>
       <div className="min-w-0 flex-1 space-y-2">

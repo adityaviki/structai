@@ -5,6 +5,7 @@ import clsx from 'clsx'
 import { api } from '../api/client'
 import { useAsync } from '../api/hooks'
 import { Logo } from '../components/ui/Logo'
+import { ThemeToggle } from '../components/ui/ThemeToggle'
 
 const MODEL_OPTIONS = [
   { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (default)' },
@@ -55,9 +56,11 @@ export function SettingsPage() {
       <header className="sticky top-0 z-30 border-b border-zinc-900 bg-zinc-950/80 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-6 py-3">
           <Logo />
+          <div className="ml-auto" />
+          <ThemeToggle />
           <Link
             to="/"
-            className="ml-auto inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200"
+            className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200"
           >
             <ArrowLeft className="h-3 w-3" /> Back to projects
           </Link>

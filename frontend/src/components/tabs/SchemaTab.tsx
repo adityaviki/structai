@@ -18,6 +18,7 @@ import dagre from '@dagrejs/dagre'
 import { KeyRound, Link2, Table2 } from 'lucide-react'
 import { api } from '../../api/client'
 import type { LayoutPosition, ProjectSchema, SchemaTable } from '../../api/types'
+import { useTheme } from '../../theme'
 
 const NODE_WIDTH = 260
 const ROW_HEIGHT = 26
@@ -92,6 +93,7 @@ function TableNode({ data }: NodeProps<TableNodeType>) {
 const nodeTypes: NodeTypes = { table: TableNode as unknown as NodeTypes[string] }
 
 export function SchemaTab({ projectId }: { projectId: string }) {
+  const { theme } = useTheme()
   const [schema, setSchema] = useState<ProjectSchema | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [nodes, setNodes] = useState<TableNodeType[]>([])
@@ -198,9 +200,9 @@ export function SchemaTab({ projectId }: { projectId: string }) {
         nodeTypes={nodeTypes}
         fitView
         proOptions={{ hideAttribution: true }}
-        colorMode="dark"
+        colorMode={theme}
       >
-        <Background gap={20} color="#27272a" />
+        <Background gap={20} color={theme === 'dark' ? '#27272a' : '#e4e4e7'} />
         <Controls position="bottom-right" showInteractive={false} />
       </ReactFlow>
     </div>
