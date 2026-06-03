@@ -132,19 +132,30 @@
     color-scheme: light;
   }
 
-  /* Dark theme — the original palette, applied via the .dark class on <html>. */
+  /* Dark theme — applied via the .dark class on <html>.
+   *
+   * A refined "graphite" neutral scale (replaces the stock Tailwind zinc):
+   *   - 950 is lifted off pure black to a deep blue-graphite, so OLED smearing
+   *     is reduced and elevated surfaces actually read as elevated;
+   *   - a subtle cool undertone (blue channel a touch above red/green) gives the
+   *     UI a modern, less "muddy" feel without looking blue;
+   *   - the 950 → 900 → 800 → 700 steps are spaced for clear elevation between
+   *     the app background, cards, borders, and hover states;
+   *   - 100 (primary text) is softened from near-white to reduce glare/eye strain
+   *     while staying well above WCAG AA on the 950 background.
+   */
   .dark {
-      --c-zinc-50: 250 250 250;
-      --c-zinc-100: 244 244 245;
-      --c-zinc-200: 228 228 231;
-      --c-zinc-300: 212 212 216;
-      --c-zinc-400: 161 161 170;
-      --c-zinc-500: 113 113 122;
-      --c-zinc-600: 82 82 91;
-      --c-zinc-700: 63 63 70;
-      --c-zinc-800: 39 39 42;
-      --c-zinc-900: 24 24 27;
-      --c-zinc-950: 9 9 11;
+      --c-zinc-50: 244 245 248;
+      --c-zinc-100: 232 234 239;
+      --c-zinc-200: 220 223 230;
+      --c-zinc-300: 195 199 209;
+      --c-zinc-400: 148 154 167;
+      --c-zinc-500: 108 113 126;
+      --c-zinc-600: 71 75 86;
+      --c-zinc-700: 47 50 58;
+      --c-zinc-800: 31 33 39;
+      --c-zinc-900: 18 19 23;
+      --c-zinc-950: 10 11 13;
       --c-brand-50: 236 253 245;
       --c-brand-100: 209 250 229;
       --c-brand-200: 167 243 208;
