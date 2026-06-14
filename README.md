@@ -16,6 +16,8 @@ it generates and runs the import script inside a single transaction. Every run
 takes a database snapshot first, so any import that lands badly is one click to
 undo.
 
+![StructAI reviewing a proposed Postgres schema: the agent's profiling notes above the generated CREATE TABLE DDL, with Request changes and Accept schema actions](docs/screenshot-schema-review.png)
+
 ## Features
 
 - **Schema-first review.** The agent shows you the DDL before it writes a line of
@@ -35,6 +37,8 @@ undo.
 - **See and browse the result.** An interactive ER diagram (drag-to-arrange,
   layout persisted per project) and a data browser with server-side sort and
   per-column filters.
+
+![The Data tab: the imported orders table with row count, column count, and a Filters panel](docs/screenshot-data-browser.png)
 
 ## Tech stack
 
