@@ -1,228 +1,148 @@
 # StructAI
 
-AI-powered structured-data import. Drop messy CSV / TSV / XLSX / JSON files
-in; an LLM agent profiles them, writes the import script, runs it inside a
-transaction against a real Postgres database, and surfaces clarifications
-when it has to make a judgment call.
+An AI-powered import tool that turns messy CSV / TSV / XLSX / JSON files into a
+proper Postgres schema, with a human in the loop for the calls the model
+shouldn't make alone.
 
-See [`PLAN.md`](./PLAN.md) for the full design and decision log.
+The story every analyst knows: someone hands you a spreadsheet, the columns are
+named `Cust_Email_Final_v2`, the same customer appears with three slightly
+different addresses, and you spend an afternoon writing one-off Python before you
+can even start the work you were actually asked to do.
 
-## Status
+StructAI is the tool for that afternoon. Drop a document on a project; an agent
+profiles it, proposes a Postgres schema (extracted entities, foreign keys,
+primary keys — the boring choices made for you), and once you accept the schema
+it generates and runs the import script inside a single transaction. Every run
+takes a database snapshot first, so any import that lands badly is one click to
+undo.
 
-**Phase 6 — polish.** Server-side **sort + per-column filters** on the
-Data tab (eq / contains / range). **Project deletion** drops every
-database and removes workspace files. **Document deletion** with safety
-checks. A **global Settings page** (API key, default model, snapshot
-retention) and a **per-project Settings tab** (model override +
-snapshot dashboard with pin/drop). A first-run banner nudges you to
-configure the API key.
+## Features
 
-Earlier phase capabilities still apply:
+- **Schema-first review.** The agent shows you the DDL before it writes a line of
+  import code. You accept, or you reply in natural language ("split the address
+  into its own table; make `customer.email` the PK") and it revises. This is the
+  most expensive decision in an import, and the one the model should not silently
+  make.
+- **Self-correcting execute loop.** When the generated script blows up (encoding,
+  mixed date formats, an embedded comma in a quoted field), the agent reads the
+  stderr tail, diagnoses the root cause, and rewrites — up to five attempts,
+  after which it asks for help instead of thrashing.
+- **Cheap undo.** Every successful import gets a template-DB snapshot. One click
+  rolls the project back to before the import landed; a retention sweeper prunes
+  old snapshots.
+- **Many shapes in, one schema out.** CSV, TSV, XLSX (multi-sheet), and JSON —
+  including multi-table inputs where foreign keys are inferred across tables.
+- **See and browse the result.** An interactive ER diagram (drag-to-arrange,
+  layout persisted per project) and a data browser with server-side sort and
+  per-column filters.
 
-- **Phase 5:** interactive ER diagram with persisted layouts.
-- **Phase 4:** CSV / TSV / XLSX / JSON uploads, multi-region profile,
-  multi-table imports with FK inference.
-- **Phase 3:** clarifications + auto mode.
-- **Phase 2:** template-DB snapshots, fix loop, stop/cancel, undo,
-  retention sweeper, worker restart recovery.
-- **Phase 1:** profile / generate / execute / validate, live SSE
-  progress, paginated data tab.
+## Tech stack
 
-## Prerequisites
+- **Backend** — [FastAPI](https://fastapi.tiangolo.com) + [arq](https://arq-docs.helpmanual.io)
+  (one Redis-backed job at a time), managed with [uv](https://github.com/astral-sh/uv).
+  Server-sent events stream the agent's progress to the UI in real time. File
+  parsing via [polars](https://pola.rs) / openpyxl; structured logging with
+  structlog.
+- **Frontend** — **React 18** + **Vite 5** + **Tailwind 3**, with
+  `@xyflow/react` + dagre for the ER diagram and `react-router-dom` for routing.
+- **AI** — **Anthropic Claude**, called through a small agent-loop wrapper that
+  lets the model pause and ask the user mid-stream when it hits a judgment call.
+- **Data** — **Postgres** as both the metadata store and each project's data DB,
+  where template-DB clones make snapshots near-free; **Redis** backs the job
+  queue and pub/sub.
 
-You install Postgres and Redis yourself (decision D2a, D9).
+## How it works
+
+A project owns its own Postgres database. An import run moves through
+**profile → propose schema → (review) → generate → execute → validate**, driven
+by an arq worker that processes one job at a time and streams every step over
+SSE. The agent can interrupt the run with a clarification (or, in auto mode,
+answer its own question via a second model call and record the decision). Before
+any script touches the project DB, a snapshot is taken so the whole run can be
+rewound atomically.
+
+The full design and decision log lives in [`PLAN.md`](./PLAN.md); a higher-level
+component overview is in [`docs/architecture.md`](./docs/architecture.md).
+
+## Getting started
+
+### Prerequisites
+
+- **Python 3.12+** and [`uv`](https://github.com/astral-sh/uv)
+- **Node 20+** and `pnpm`
+- **Postgres** (role with `CREATEDB`) and **Redis**
+- An **Anthropic API key** (only needed once you actually run an import)
+
+### 1. Bring up Postgres + Redis
+
+The simplest path is the bundled compose stack (Postgres on `5434`, Redis on
+`6381`, chosen to avoid colliding with a local cluster):
 
 ```bash
-# Arch
-sudo pacman -S postgresql redis
-sudo systemctl enable --now postgresql redis
-# Or as a user service if you prefer
+docker compose up -d
 ```
 
-Create a Postgres role with `CREATEDB`. On a fresh Arch install the default
-role is `postgres`; the easiest path is to create a role matching your OS
-user so peer auth on the local socket just works:
+Prefer your own local services? Point the URLs in `.env` at them instead (e.g.
+`postgresql:///postgres` and `redis://127.0.0.1:6379/0`).
+
+### 2. Configure and install
 
 ```bash
-sudo -u postgres createuser -s "$USER"   # superuser is convenient for dev
-# Or, against an existing role:
-# sudo -u postgres psql -c "ALTER ROLE myuser CREATEDB"
-```
-
-Then set `STRUCTAI_PG_URL` in `.env` to a URL the new role can authenticate
-with — e.g. `postgresql:///postgres` (Unix socket, current user, default
-database).
-
-Toolchain:
-
-- Python 3.12+
-- [`uv`](https://github.com/astral-sh/uv)
-- Node 20+ and `pnpm`
-
-## First-time setup
-
-```bash
-cp .env.example .env       # edit if your PG/Redis aren't on the defaults
+cp .env.example .env       # edit if your Postgres/Redis aren't on the defaults
 make install               # uv sync + pnpm install
-make migrate               # creates structai_meta and schema_migrations
+make migrate               # creates the structai_meta DB and runs migrations
 ```
 
-## Run
+### 3. Run
 
 ```bash
 make dev
 ```
 
-That runs three processes:
+That starts three processes:
 
-- `uvicorn` API on http://127.0.0.1:8000 (docs at `/api/docs`)
-- `arq` worker (one job at a time)
-- Vite dev server on http://127.0.0.1:5173 (proxies `/api` to the backend)
+- `uvicorn` API on http://127.0.0.1:8000 (OpenAPI docs at `/api/docs`)
+- the `arq` worker (one job at a time)
+- the Vite dev server on http://127.0.0.1:5173 (proxies `/api` to the backend)
 
-Quick checks:
+Open http://127.0.0.1:5173, add your Anthropic key on the Settings page (or set
+`STRUCTAI_ANTHROPIC_API_KEY` in `.env`), create a project, upload one of the
+files in [`samples/`](./samples), and start an import.
 
-```bash
-curl http://127.0.0.1:8000/api/healthz             # → {"status":"ok"}
-curl -X POST http://127.0.0.1:8000/api/_dev/enqueue-noop   # worker logs "worker.noop.fired"
-```
+### Configuration
 
-## End-to-end test (Phase 1)
+All backend settings are read from `.env` (see `.env.example`):
 
-Requires a valid Anthropic API key. Add it to `.env`:
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `STRUCTAI_PG_URL` | Postgres URL; the role needs `CREATEDB` | compose stack on `5434` |
+| `STRUCTAI_META_DB_NAME` | Name of the metadata database | `structai_meta` |
+| `STRUCTAI_REDIS_URL` | Redis URL for the arq queue + pub/sub | compose stack on `6381` |
+| `STRUCTAI_ANTHROPIC_API_KEY` | Anthropic key (also settable in the UI) | unset |
+| `STRUCTAI_DEFAULT_MODEL` | Default Claude model (override per project) | `claude-sonnet-4-6` |
+| `STRUCTAI_WORKSPACE` | Root for documents, run logs, snapshot metadata | `~/.local/share/structai` |
 
-```
-STRUCTAI_ANTHROPIC_API_KEY=sk-ant-...
-```
-
-Restart `make dev` (so the worker picks up the new env), then in a browser:
-
-1. Open http://127.0.0.1:5173.
-2. Click **New project** → name it (e.g. "Smoke test") → Create.
-3. Go to the **Documents** tab → upload `samples/people.csv`.
-4. Click **New import** → pick the file → optionally write an instruction
-   (e.g. *"use snake_case"*) → **Start import**.
-5. Watch the four steps run live (profile → generate → execute → validate).
-   The generated `import.py` shows up in the run detail panel.
-6. When the run completes, switch to the **Data** tab and inspect the
-   imported rows.
-
-The same flow from the command line (handy for debugging):
-
-```bash
-PROJECT=$(curl -s -X POST -H 'content-type: application/json' \
-  -d '{"name":"Smoke test"}' http://127.0.0.1:8000/api/projects | jq -r .id)
-DOC=$(curl -s -F "file=@samples/people.csv" \
-  http://127.0.0.1:8000/api/projects/$PROJECT/documents | jq -r .id)
-RUN=$(curl -s -X POST -H 'content-type: application/json' \
-  -d "{\"document_id\":\"$DOC\"}" \
-  http://127.0.0.1:8000/api/projects/$PROJECT/imports | jq -r .id)
-# Watch SSE:
-curl -N http://127.0.0.1:8000/api/runs/$RUN/events
-
-# Stop a still-running import:
-curl -X POST http://127.0.0.1:8000/api/runs/$RUN/cancel
-# Undo a completed import (the project DB rewinds atomically):
-curl -X POST http://127.0.0.1:8000/api/runs/$RUN/undo
-```
-
-## Exercising Phase 2
-
-- **Fix loop:** upload a CSV that will trip up a naïve script — e.g. a
-  date column with mixed `MM/DD/YYYY` and `YYYY-MM-DD` formatting, or a
-  numeric column containing `"N/A"` strings. The first execute attempt
-  will fail; the run goes into `fixing`; the agent rewrites the script
-  and the second attempt succeeds. The run detail view shows each
-  attempt as its own step card.
-- **Stop:** while a run is in `executing` (long file), click **Stop**
-  on the run detail. The subprocess is killed, the snapshot is dropped,
-  the live project DB is unchanged.
-- **Undo:** on a completed import, click **Undo**. The project DB is
-  restored to its pre-run state. Any imports that ran after the one you
-  undid are also marked `reverted`.
-
-## Exercising Phase 3
-
-- **Clarification (manual):** add an instruction like
-  *"ask me whether 'amount' should be cents or dollars"* and start an
-  import. The status will move to `needs_clarification` and the run
-  detail will show a card with options. Pick one (or write a custom
-  instruction) and **Continue import** — the worker resumes with your
-  answer.
-- **Auto mode:** start an import with **Auto mode** enabled in the
-  New Import modal. If the agent asks anything, the orchestrator
-  synthesizes an answer via a second LLM call and records it under
-  *Decisions the agent made on your behalf*.
-- **API:**
-  - `GET /api/runs/:id/clarifications` — list all clarifications.
-  - `POST /api/runs/:id/clarifications/:cid/answer` body
-    `{"choice_id": "...", "custom": "..."}` — answer manually.
-
-## Exercising Phase 4
-
-- **TSV:** upload `samples/people.tsv` and run an import. Same flow as
-  CSV; the agent reads with `polars.read_csv(separator='\t')`.
-- **JSON (one table):** an array-of-objects file is treated as a single
-  table.
-- **JSON (multi-table with FK):** upload `samples/shop.json`. The
-  top-level keys `customers` and `orders` become two tables with a
-  foreign key on `orders.customer_id`.
-- **XLSX (multi-sheet with FK):** upload `samples/shop.xlsx` — same
-  data as the JSON sample, one sheet per table.
-
-## Exercising Phase 5
-
-- After importing `samples/shop.json` (or `shop.xlsx`), open the
-  **Schema** tab. Two boxes — `customers` and `orders` — with a single
-  FK edge connecting `orders.customer_id` to `customers.id`.
-- Drag the boxes around. The positions are persisted per project; reload
-  the page and they stay where you left them.
-- API:
-  - `GET /api/projects/:id/schema` — tables + columns + PK / FK metadata.
-  - `GET /api/projects/:id/schema/layout` and
-    `POST .../schema/layout` body `{positions: [{table_name, x, y}, ...]}`.
-
-## Exercising Phase 6
-
-- **Sort & filter:** open any imported table in the **Data** tab. Click
-  a column header to cycle asc → desc → off. Open the **Filters** panel
-  to filter by `contains` on text columns, equality or range on
-  numbers/dates, or boolean values. Results are server-paginated.
-- **Settings page** at `/settings`: configure the Anthropic API key (if
-  not already in env), pick a default model, set snapshot retention
-  (keep last N + max age in days).
-- **Project Settings tab** (per project): override the default model
-  just for that project; pin / drop snapshots in the dashboard.
-- **Delete project** from the project header → drops every DB, snapshot,
-  and workspace file owned by the project.
-- **Delete document** from the Documents tab (blocked if an active or
-  completed run still references it; reverted/cancelled/failed runs
-  don't block).
-- API additions:
-  - `GET /api/settings`, `PATCH /api/settings`,
-    `PUT /api/projects/:id/model`.
-  - `GET /api/projects/:id/snapshots`,
-    `POST .../snapshots/:run_id/pin`,
-    `DELETE .../snapshots/:run_id`.
-  - `DELETE /api/projects/:id`,
-    `DELETE /api/projects/:id/documents/:doc_id`.
-  - Sort / filter on
-    `GET /api/projects/:id/tables/:name/rows?sort=&dir=&filter=col:op:value`
-    (op ∈ `eq|neq|gt|gte|lt|lte|contains`).
-
-## Layout
+## Project layout
 
 ```
-backend/             # FastAPI + arq, managed with uv
-frontend/            # React + Vite + Tailwind (started from the prototype)
-designs-archive/     # pristine pre-implementation prototype, read-only reference
-migrations/          # SQL migrations for the structai_meta DB (inside backend/)
-PLAN.md              # design & decision log
+backend/     FastAPI + arq service (agent, pipeline, worker, api), managed with uv
+frontend/    React + Vite + Tailwind SPA
+deploy/      Provisioning, Caddy snippet, and systemd units (see deploy/README.md)
+docs/        Architecture overview
+samples/     Example CSV / TSV / JSON / XLSX inputs to try imports against
+PLAN.md      Design & decision log
 ```
 
 ## Useful commands
 
 ```bash
-make test            # backend unit tests (pytest)
-make lint            # ruff check + mypy on the backend
-make fmt             # ruff format the backend
+make test    # backend unit tests (pytest)
+make lint    # ruff check + mypy on the backend
+make fmt     # ruff format the backend
 ```
+
+## Deployment
+
+The production setup runs the FastAPI app, the arq worker, Postgres, and Redis
+under systemd behind Caddy. Full step-by-step instructions are in
+[`deploy/README.md`](./deploy/README.md).
