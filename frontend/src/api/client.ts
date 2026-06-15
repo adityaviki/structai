@@ -9,6 +9,7 @@ import type {
   ProjectWithStats,
   RowsPage,
   SchemaProposalWire,
+  SessionWire,
   SettingsPatch,
   SettingsWire,
   SnapshotWire,
@@ -35,6 +36,15 @@ export class ApiClientError extends Error {
   }
 }
 
+// Notified when a request comes back 401 after the session has gone (expired or
+// signed out in another tab). The AuthProvider registers a handler that drops
+// the user back to the login screen. Auth endpoints are excluded so the login
+// form can show its own error instead of bouncing.
+let onUnauthorized: (() => void) | null = null
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  onUnauthorized = handler
+}
+
 async function request<T>(
   method: string,
   path: string,
@@ -49,6 +59,9 @@ async function request<T>(
   }
   const res = await fetch(path, init)
   if (!res.ok) {
+    if (res.status === 401 && !path.startsWith('/api/auth/')) {
+      onUnauthorized?.()
+    }
     let problem: ProblemDetails = { status: res.status, title: res.statusText }
     try {
       problem = (await res.json()) as ProblemDetails
@@ -62,6 +75,12 @@ async function request<T>(
 }
 
 export const api = {
+  // Auth
+  me: () => request<SessionWire>('GET', '/api/auth/me'),
+  login: (username: string, password: string) =>
+    request<SessionWire>('POST', '/api/auth/login', { username, password }),
+  logout: () => request<SessionWire>('POST', '/api/auth/logout'),
+
   // Projects
   listProjects: () => request<ProjectWithStats[]>('GET', '/api/projects'),
   getProject: (id: string) => request<ProjectWire>('GET', `/api/projects/${id}`),

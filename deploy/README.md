@@ -87,6 +87,9 @@ sudo $EDITOR /etc/structai.env
 Fill in:
 - `STRUCTAI_PG_URL` — from step 5
 - `STRUCTAI_ANTHROPIC_API_KEY` — from console.anthropic.com
+- `STRUCTAI_AUTH_PASSWORD` — the login password. **Set this before the site is
+  reachable** — the API and UI are open while it's blank. `STRUCTAI_AUTH_USERNAME`
+  defaults to `admin`. There is no sign-up; this single login is the only one.
 
 ## 7. Install systemd units
 

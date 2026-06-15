@@ -125,6 +125,22 @@ All backend settings are read from `.env` (see `.env.example`):
 | `STRUCTAI_ANTHROPIC_API_KEY` | Anthropic key (also settable in the UI) | unset |
 | `STRUCTAI_DEFAULT_MODEL` | Default Claude model (override per project) | `claude-sonnet-4-6` |
 | `STRUCTAI_WORKSPACE` | Root for documents, run logs, snapshot metadata | `~/.local/share/structai` |
+| `STRUCTAI_AUTH_USERNAME` | Login username | `admin` |
+| `STRUCTAI_AUTH_PASSWORD` | Login password; blank leaves the app unprotected | unset |
+| `STRUCTAI_AUTH_SECRET` | Session-cookie signing key | derived from the password |
+
+### Login
+
+There is a single shared login and no sign-up — accounts can't be created
+through the app. Authentication switches on as soon as you set
+`STRUCTAI_AUTH_PASSWORD` in `.env`.
+
+With a password set, every `/api/*` route (except `healthz` and the auth
+endpoints) requires a session cookie, and the UI shows a login screen. Leave it
+blank to run unprotected (handy for local dev; the test suite always runs this
+way). Sessions are stateless cookies signed with a key derived from the
+password, so changing the password logs everyone out — set `STRUCTAI_AUTH_SECRET`
+to pin the signing key independently.
 
 ## Project layout
 

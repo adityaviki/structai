@@ -6,6 +6,7 @@ import { api } from '../api/client'
 import { useAsync } from '../api/hooks'
 import { Logo } from '../components/ui/Logo'
 import { ThemeToggle } from '../components/ui/ThemeToggle'
+import { LogoutButton } from '../components/ui/LogoutButton'
 
 const MODEL_OPTIONS = [
   { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (default)' },
@@ -58,6 +59,7 @@ export function SettingsPage() {
           <Logo />
           <div className="ml-auto" />
           <ThemeToggle />
+          <LogoutButton />
           <Link
             to="/"
             className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200"

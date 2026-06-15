@@ -14,6 +14,10 @@ os.environ.setdefault("STRUCTAI_PG_URL", "postgresql:///postgres")
 os.environ["STRUCTAI_META_DB_NAME"] = TEST_META_DB
 # Suppress LLM key warning during tests.
 os.environ.setdefault("STRUCTAI_ANTHROPIC_API_KEY", "sk-test")
+# Keep the API unprotected by default, even if the dev .env sets a password.
+# (test_auth.py opts back in per-test via monkeypatch.) An explicit empty env
+# var wins over the .env file in pydantic-settings.
+os.environ["STRUCTAI_AUTH_PASSWORD"] = ""
 # Quarantine workspace writes inside a temp dir.
 _WORKSPACE_TMP = tempfile.mkdtemp(prefix="structai-tests-")
 os.environ["STRUCTAI_WORKSPACE"] = _WORKSPACE_TMP

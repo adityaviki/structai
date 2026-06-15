@@ -49,6 +49,25 @@ class Settings(BaseSettings):
     # Vite proxy (default flow uses the proxy and doesn't need CORS).
     cors_origins: tuple[str, ...] = ("http://127.0.0.1:5173",)
 
+    # --- Authentication (single shared login; no account creation) ---
+    # The app is single-tenant: there is one login, configured here. Set
+    # ``auth_password`` to turn protection on. While it is empty the API and
+    # UI stay open (handy for local dev and the test suite).
+    auth_username: str = "admin"
+    auth_password: str | None = None
+    # Optional explicit signing key for session cookies. If unset, the key is
+    # derived from the password, so sessions survive restarts and are
+    # invalidated automatically when the password changes.
+    auth_secret: str | None = None
+    # Session lifetime in hours (default: two weeks).
+    auth_session_ttl_hours: int = 24 * 14
+
+    @property
+    def auth_enabled(self) -> bool:
+        """Auth is enforced only once a non-empty password is configured."""
+
+        return bool(self.auth_password)
+
 
 def get_settings() -> Settings:
     return Settings()

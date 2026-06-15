@@ -12,6 +12,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { Logo } from '../components/ui/Logo'
 import { ThemeToggle } from '../components/ui/ThemeToggle'
+import { LogoutButton } from '../components/ui/LogoutButton'
 import { Modal } from '../components/ui/Modal'
 import { api } from '../api/client'
 import { useAsync } from '../api/hooks'
@@ -60,6 +61,7 @@ export function HomePage() {
           <Logo />
           <div className="flex items-center gap-2">
             <ThemeToggle />
+            <LogoutButton />
             <Link to="/settings" className="btn-ghost" title="Settings">
               <SettingsIcon className="h-4 w-4" />
             </Link>

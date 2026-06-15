@@ -159,6 +159,13 @@ export interface ProjectLayout {
   positions: LayoutPosition[]
 }
 
+export interface SessionWire {
+  authenticated: boolean
+  // False when the server has no password configured — skip the login gate.
+  auth_required: boolean
+  username: string | null
+}
+
 export interface SettingsWire {
   anthropic_key_present: boolean
   anthropic_key_source: 'env' | 'config' | 'unset'
