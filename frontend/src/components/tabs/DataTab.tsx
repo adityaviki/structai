@@ -7,6 +7,7 @@ import {
   Database,
   Filter,
   Inbox,
+  Sparkles,
   Table2,
   X,
 } from 'lucide-react'
@@ -14,6 +15,7 @@ import clsx from 'clsx'
 import { api } from '../../api/client'
 import { useAsync } from '../../api/hooks'
 import type { RowsPage, SchemaColumn, TableDetail } from '../../api/types'
+import { AIChangesPanel } from '../AIChangesPanel'
 
 const NUMERIC_TYPES = new Set([
   'integer',
@@ -39,6 +41,9 @@ export function DataTab({ projectId }: { projectId: string }) {
     [projectId],
   )
 
+  const [showAgent, setShowAgent] = useState(false)
+  const [reloadToken, setReloadToken] = useState(0)
+
   const activeName = tableName ?? tables?.[0]?.name ?? ''
 
   if (tablesLoading) return <p className="text-sm text-zinc-500">Loading tables…</p>
@@ -62,8 +67,21 @@ export function DataTab({ projectId }: { projectId: string }) {
   return (
     <div className="flex h-[calc(100vh-9.5rem)] gap-4">
       <aside className="card flex w-72 shrink-0 flex-col overflow-hidden">
-        <div className="border-b border-zinc-800 px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-500">
-          Tables
+        <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
+          <span className="text-[10px] uppercase tracking-wider text-zinc-500">Tables</span>
+          <button
+            onClick={() => setShowAgent((v) => !v)}
+            title="AI agent"
+            className={clsx(
+              'inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] transition-colors',
+              showAgent
+                ? 'bg-brand-500/15 text-brand-200'
+                : 'text-brand-300/80 hover:bg-zinc-800 hover:text-brand-200',
+            )}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Agent
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto p-2">
           {(tables ?? []).map((t) => (
@@ -93,23 +111,40 @@ export function DataTab({ projectId }: { projectId: string }) {
 
       <section className="card flex min-w-0 flex-1 flex-col overflow-hidden">
         {activeName ? (
-          <TableView projectId={projectId} tableName={activeName} />
+          <TableView projectId={projectId} tableName={activeName} reloadToken={reloadToken} />
         ) : (
           <div className="flex flex-1 items-center justify-center text-zinc-500">
             <Inbox className="mr-2 h-4 w-4" /> Select a table
           </div>
         )}
       </section>
+
+      {showAgent && (
+        <AIChangesPanel
+          projectId={projectId}
+          tableName={activeName || undefined}
+          onClose={() => setShowAgent(false)}
+          onDataChanged={() => setReloadToken((t) => t + 1)}
+        />
+      )}
     </div>
   )
 }
 
 type SortState = { col: string; dir: 'asc' | 'desc' } | null
 
-function TableView({ projectId, tableName }: { projectId: string; tableName: string }) {
+function TableView({
+  projectId,
+  tableName,
+  reloadToken,
+}: {
+  projectId: string
+  tableName: string
+  reloadToken: number
+}) {
   const { data: detail, loading: detailLoading, error: detailError } = useAsync(
     () => api.getTable(projectId, tableName),
-    [projectId, tableName],
+    [projectId, tableName, reloadToken],
   )
 
   const [pages, setPages] = useState<RowsPage[]>([])

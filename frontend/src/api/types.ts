@@ -216,3 +216,40 @@ export interface RowsPage {
   rows: (string | number | boolean | null)[][]
   next_cursor: string | null
 }
+
+// Chat data agent
+export type ChatRole = 'user' | 'agent'
+export type DataChangeStatus = 'proposing' | 'applied' | 'rejected' | 'failed' | 'reverted'
+
+export interface ChangePreviewItem {
+  column: string
+  before: string
+  after: string
+}
+
+export interface ProposedChangeWire {
+  id: string
+  target_table: string | null
+  summary: string | null
+  sql: string
+  affected_rows: number | null
+  total_rows: number | null
+  preview: ChangePreviewItem[] | null
+  status: DataChangeStatus
+  snapshot_available: boolean
+  created_at: string
+  applied_at: string | null
+  reverted_at: string | null
+}
+
+export interface ChatMessageWire {
+  id: string
+  role: ChatRole
+  content: string
+  change: ProposedChangeWire | null
+  created_at: string
+}
+
+export interface ChatThreadWire {
+  messages: ChatMessageWire[]
+}

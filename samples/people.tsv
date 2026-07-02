@@ -1,5 +1,0 @@
-id	name	email	age	joined_at	active
-1	Alice Anderson	alice@example.com	30	2024-01-15	true
-2	Bob Brown	bob@example.com	25	2024-02-03	true
-3	Carol Chen	carol@example.com		2024-02-19	false
-4	Dan Davis	dan@example.com	42	2024-03-11	true

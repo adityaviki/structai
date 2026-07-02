@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from .agent import events as agent_events
 from .api.auth import router as auth_router
+from .api.chat import router as chat_router
 from .api.dev import router as dev_router
 from .api.documents import router as documents_router
 from .api.errors import ApiError, api_error_handler
@@ -136,6 +137,7 @@ def create_app() -> FastAPI:
     app.include_router(documents_router)
     app.include_router(runs_router)
     app.include_router(tables_router)
+    app.include_router(chat_router)
     app.include_router(schema_router)
     app.include_router(settings_router)
     app.include_router(project_settings_router)

@@ -1,4 +1,6 @@
 import type {
+  ChatMessageWire,
+  ChatThreadWire,
   ClarificationWire,
   DocumentWire,
   ImportRunWire,
@@ -7,6 +9,7 @@ import type {
   ProjectSchema,
   ProjectWire,
   ProjectWithStats,
+  ProposedChangeWire,
   RowsPage,
   SchemaProposalWire,
   SessionWire,
@@ -162,6 +165,18 @@ export const api = {
       `/api/projects/${projectId}/tables/${encodeURIComponent(name)}/rows${q}`,
     )
   },
+
+  // Chat data agent
+  getChat: (projectId: string) =>
+    request<ChatThreadWire>('GET', `/api/projects/${projectId}/chat`),
+  chatTurn: (projectId: string, message: string) =>
+    request<ChatMessageWire>('POST', `/api/projects/${projectId}/chat`, { message }),
+  applyChange: (projectId: string, changeId: string) =>
+    request<ProposedChangeWire>('POST', `/api/projects/${projectId}/changes/${changeId}/apply`),
+  undoChange: (projectId: string, changeId: string) =>
+    request<ProposedChangeWire>('POST', `/api/projects/${projectId}/changes/${changeId}/undo`),
+  rejectChange: (projectId: string, changeId: string) =>
+    request<ProposedChangeWire>('POST', `/api/projects/${projectId}/changes/${changeId}/reject`),
 
   // Schema diagram
   getSchema: (projectId: string) =>

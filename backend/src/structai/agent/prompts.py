@@ -244,6 +244,153 @@ PROPOSE_IMPORT_TOOL: ToolParam = {
 }
 
 
+SYSTEM_CHAT = """You are StructAI's data agent. The user has already imported data into this project's Postgres database and is now chatting with you to inspect or modify it. You operate ONLY on the tables that already exist in this project (their schema is given in the user message). You never read files, never reach the network, and never touch other projects.
+
+You have two tools:
+
+- `run_read_sql` — run a single READ-ONLY query (a `SELECT`, or a `WITH ... SELECT`) to inspect the data before you answer or propose a change. The result rows come back to you as text. Use it to check actual values, counts, cardinalities, and to build a faithful before/after preview. It runs in a read-only transaction, so any attempt to write fails.
+- `chat_reply` — your FINAL turn. Call it exactly once to end every turn. Put your natural-language response to the user in `reply`. Fill `change` ONLY when the user asked you to modify the data or schema; for a plain question, omit `change`.
+
+Behaviour:
+
+- **Questions** ("how many…", "find duplicates", "what's the distribution of…"): explore with `run_read_sql`, then put the finding in `reply`. Do NOT propose a change.
+- **Modifications** ("lowercase the emails", "fill missing X", "add a full_name column", "dedupe customers", "convert price to cents", "split addresses out"): inspect the relevant rows first, then propose ONE change in `chat_reply.change`:
+  - `target_table` — the main table affected.
+  - `sql` — runnable Postgres SQL (one or more `;`-separated statements) that performs the change. It is shown to the user verbatim and only executed after they click Apply. Do NOT wrap it in BEGIN/COMMIT — the server runs it in its own transaction.
+  - `summary` — one or two sentences on what it does and what it touches.
+  - `preview` — 2–4 representative `{column, before, after}` examples taken from real rows you read.
+
+Rules:
+
+1. Scope every change with a WHERE clause so you only touch rows that actually need it (e.g. `WHERE email <> lower(email)`).
+2. Prefer a single set-based statement over row-by-row logic.
+3. For a destructive type change, use the add-column → backfill → drop-old → rename pattern rather than an in-place cast that could fail or lose data.
+4. snake_case identifiers; treat empty strings as NULL unless the user says otherwise.
+5. If a request is risky (drops a column that holds data, deletes many rows, irreversible coercion), still propose it, but call out the risk plainly in both `reply` and `summary` so the user can decide before applying.
+6. You may call `run_read_sql` a few times, but keep it efficient, then finish with `chat_reply`.
+"""
+
+
+RUN_READ_SQL_TOOL: ToolParam = {
+    "name": "run_read_sql",
+    "description": (
+        "Run one READ-ONLY SQL query against the project database to inspect the "
+        "data before answering or proposing a change. Must be a single SELECT or "
+        "WITH ... SELECT statement; writes are rejected. Returns up to a few dozen "
+        "result rows rendered as text."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "sql": {
+                "type": "string",
+                "description": "A single read-only SQL statement (SELECT / WITH ... SELECT).",
+            },
+        },
+        "required": ["sql"],
+    },
+}
+
+
+CHAT_REPLY_TOOL: ToolParam = {
+    "name": "chat_reply",
+    "description": (
+        "End your turn. Call exactly once. Put your message to the user in `reply`; "
+        "include `change` only when proposing a data or schema modification."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "reply": {
+                "type": "string",
+                "description": "Natural-language response to the user.",
+            },
+            "change": {
+                "type": "object",
+                "description": (
+                    "Omit entirely for read-only questions. Present only when "
+                    "proposing a modification the user must approve."
+                ),
+                "properties": {
+                    "target_table": {
+                        "type": "string",
+                        "description": "The main table the change affects.",
+                    },
+                    "sql": {
+                        "type": "string",
+                        "description": (
+                            "Runnable Postgres SQL; one or more ;-separated "
+                            "statements. No BEGIN/COMMIT — the server wraps it."
+                        ),
+                    },
+                    "summary": {
+                        "type": "string",
+                        "description": "1-2 sentences on what the change does and what it touches.",
+                    },
+                    "affected_estimate": {
+                        "type": "integer",
+                        "description": "Your best estimate of how many rows change.",
+                    },
+                    "preview": {
+                        "type": "array",
+                        "description": "2-4 representative before/after examples from real rows.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "column": {"type": "string"},
+                                "before": {"type": "string"},
+                                "after": {"type": "string"},
+                            },
+                            "required": ["column", "before", "after"],
+                        },
+                    },
+                },
+                "required": ["target_table", "sql", "summary"],
+            },
+        },
+        "required": ["reply"],
+    },
+}
+
+
+def render_chat_user_message(
+    *,
+    schema_text: str,
+    history: list[dict[str, str]],
+    message: str,
+) -> str:
+    """Build the chat turn's user content: schema context + prior turns + ask.
+
+    ``history`` is a list of {"role", "content"} dicts in chronological order,
+    excluding the new ``message`` (which is appended last for emphasis).
+    """
+
+    parts = [
+        "The project's current tables (name, columns, types, keys):",
+        "",
+        "```",
+        schema_text.strip() or "(no tables yet)",
+        "```",
+        "",
+    ]
+    if history:
+        parts.append("## Conversation so far")
+        parts.append("")
+        for turn in history:
+            who = "User" if turn["role"] == "user" else "You"
+            parts.append(f"**{who}:** {turn['content'].strip()}")
+            parts.append("")
+    parts.append("## The user's new message")
+    parts.append("")
+    parts.append(message.strip())
+    parts.append("")
+    parts.append(
+        "Inspect with `run_read_sql` if useful, then call `chat_reply` "
+        "(include `change` only if this asks you to modify the data)."
+    )
+    return "\n".join(parts)
+
+
 def render_propose_schema_user_message(
     *,
     profile_json: str,

@@ -20,6 +20,21 @@ if TYPE_CHECKING:
     from ..settings import Settings
 
 
+def snapshot_name(project_db: str, token: str, *, infix: str = "_snap_") -> str:
+    """Build a PG-identifier-legal snapshot DB name unique to ``token``.
+
+    Postgres caps identifiers at 63 chars. ULIDs are monotonic — same-millisecond
+    ids share their head and differ only in the TAIL — so we keep the tail of the
+    token (run id or change id), reserving at least 16 chars for it.
+    """
+
+    min_suffix = 16
+    max_project_len = 63 - len(infix) - min_suffix
+    project_part = project_db if len(project_db) <= max_project_len else project_db[:max_project_len]
+    available = 63 - len(project_part) - len(infix)
+    return f"{project_part}{infix}{token.lower()[-available:]}"
+
+
 async def _terminate_connections(admin: asyncpg.Connection, db_name: str) -> None:
     """Force-kill any backend connections to db_name.
 

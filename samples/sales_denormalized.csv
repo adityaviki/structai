@@ -1,0 +1,41 @@
+order_id,order_date,customer_email,customer_name,customer_phone,customer_country,product_sku,product_name,product_category,unit_price,quantity
+1001,2025-03-01,alice@example.com,Alice Johnson,+1-555-0101,USA,SKU-WIDGET-01,Standard Widget,Widgets,19.99,2
+1002,2025-03-01,bob@example.com,Bob Brown,+44-20-5550102,UK,SKU-GADGET-02,Pro Gadget,Gadgets,89.00,1
+1003,2025-03-02,carol@example.com,Carol White,+1-555-0103,USA,SKU-CABLE-01,USB-C Cable,Accessories,8.99,3
+1004,2025-03-02,alice@example.com,Alice Johnson,+1-555-0101,USA,SKU-CASE-01,Phone Case,Accessories,24.99,1
+1005,2025-03-03,dan@example.com,Dan Green,+1-555-0104,Canada,SKU-WIDGET-02,Deluxe Widget,Widgets,39.99,1
+1006,2025-03-03,eve@example.com,Eve Davis,+61-2-5550105,Australia,SKU-BOOK-01,Handbook,Books,29.95,2
+1007,2025-03-04,frank@example.com,Frank Miller,+49-30-5550106,Germany,SKU-GADGET-01,Mini Gadget,Gadgets,12.50,4
+1008,2025-03-04,grace@example.com,Grace Lee,+1-555-0107,USA,SKU-CABLE-02,HDMI Cable,Accessories,14.99,2
+1009,2025-03-05,alice@example.com,Alice Johnson,+1-555-0101,USA,SKU-WIDGET-01,Standard Widget,Widgets,19.99,1
+1010,2025-03-05,henry@example.com,Henry Wilson,+1-555-0108,USA,SKU-GADGET-02,Pro Gadget,Gadgets,89.00,1
+1011,2025-03-06,bob@example.com,Bob Brown,+44-20-5550102,UK,SKU-CABLE-01,USB-C Cable,Accessories,8.99,5
+1012,2025-03-06,carol@example.com,Carol White,+1-555-0103,USA,SKU-CASE-01,Phone Case,Accessories,24.99,2
+1013,2025-03-07,dan@example.com,Dan Green,+1-555-0104,Canada,SKU-BOOK-01,Handbook,Books,29.95,1
+1014,2025-03-07,eve@example.com,Eve Davis,+61-2-5550105,Australia,SKU-WIDGET-02,Deluxe Widget,Widgets,39.99,3
+1015,2025-03-08,frank@example.com,Frank Miller,+49-30-5550106,Germany,SKU-GADGET-02,Pro Gadget,Gadgets,89.00,1
+1016,2025-03-08,grace@example.com,Grace Lee,+1-555-0107,USA,SKU-WIDGET-01,Standard Widget,Widgets,19.99,2
+1017,2025-03-09,alice@example.com,Alice Johnson,+1-555-0101,USA,SKU-CABLE-02,HDMI Cable,Accessories,14.99,4
+1018,2025-03-09,henry@example.com,Henry Wilson,+1-555-0108,USA,SKU-CASE-01,Phone Case,Accessories,24.99,1
+1019,2025-03-10,bob@example.com,Bob Brown,+44-20-5550102,UK,SKU-GADGET-01,Mini Gadget,Gadgets,12.50,2
+1020,2025-03-10,carol@example.com,Carol White,+1-555-0103,USA,SKU-WIDGET-01,Standard Widget,Widgets,19.99,1
+1021,2025-03-11,dan@example.com,Dan Green,+1-555-0104,Canada,SKU-CABLE-01,USB-C Cable,Accessories,8.99,6
+1022,2025-03-11,eve@example.com,Eve Davis,+61-2-5550105,Australia,SKU-GADGET-02,Pro Gadget,Gadgets,89.00,1
+1023,2025-03-12,frank@example.com,Frank Miller,+49-30-5550106,Germany,SKU-BOOK-01,Handbook,Books,29.95,2
+1024,2025-03-12,grace@example.com,Grace Lee,+1-555-0107,USA,SKU-CASE-01,Phone Case,Accessories,24.99,3
+1025,2025-03-13,alice@example.com,Alice Johnson,+1-555-0101,USA,SKU-WIDGET-02,Deluxe Widget,Widgets,39.99,1
+1026,2025-03-13,henry@example.com,Henry Wilson,+1-555-0108,USA,SKU-CABLE-02,HDMI Cable,Accessories,14.99,2
+1027,2025-03-14,bob@example.com,Bob Brown,+44-20-5550102,UK,SKU-WIDGET-01,Standard Widget,Widgets,19.99,4
+1028,2025-03-14,carol@example.com,Carol White,+1-555-0103,USA,SKU-GADGET-01,Mini Gadget,Gadgets,12.50,1
+1029,2025-03-15,dan@example.com,Dan Green,+1-555-0104,Canada,SKU-CASE-01,Phone Case,Accessories,24.99,2
+1030,2025-03-15,eve@example.com,Eve Davis,+61-2-5550105,Australia,SKU-CABLE-01,USB-C Cable,Accessories,8.99,3
+1031,2025-03-16,frank@example.com,Frank Miller,+49-30-5550106,Germany,SKU-WIDGET-01,Standard Widget,Widgets,19.99,1
+1032,2025-03-16,grace@example.com,Grace Lee,+1-555-0107,USA,SKU-GADGET-02,Pro Gadget,Gadgets,89.00,1
+1033,2025-03-17,alice@example.com,Alice Johnson,+1-555-0101,USA,SKU-BOOK-01,Handbook,Books,29.95,2
+1034,2025-03-17,henry@example.com,Henry Wilson,+1-555-0108,USA,SKU-WIDGET-02,Deluxe Widget,Widgets,39.99,1
+1035,2025-03-18,bob@example.com,Bob Brown,+44-20-5550102,UK,SKU-CASE-01,Phone Case,Accessories,24.99,1
+1036,2025-03-18,carol@example.com,Carol White,+1-555-0103,USA,SKU-CABLE-02,HDMI Cable,Accessories,14.99,5
+1037,2025-03-19,dan@example.com,Dan Green,+1-555-0104,Canada,SKU-GADGET-02,Pro Gadget,Gadgets,89.00,1
+1038,2025-03-19,eve@example.com,Eve Davis,+61-2-5550105,Australia,SKU-WIDGET-01,Standard Widget,Widgets,19.99,2
+1039,2025-03-20,frank@example.com,Frank Miller,+49-30-5550106,Germany,SKU-CABLE-01,USB-C Cable,Accessories,8.99,4
+1040,2025-03-20,grace@example.com,Grace Lee,+1-555-0107,USA,SKU-BOOK-01,Handbook,Books,29.95,1
